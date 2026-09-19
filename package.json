@@ -1,0 +1,43 @@
+{
+  "name": "tabletop-games",
+  "version": "1.0.0",
+  "description": "Zero-dependency, server-authoritative tabletop game collection (UNO, 斗地主, 炸弹猫, 骗子酒馆, 抢21) with a pure-JS rules core and LAN multiplayer: WebSocket room + UDP auto-discovery.",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./lan": "./src/lan/index.mjs",
+    "./bt": "./src/bt/bridge.js"
+  },
+  "files": [
+    "src",
+    "bin",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node test/run-all.mjs",
+    "test:e2e": "node test/e2e-lan.mjs",
+    "serve": "node bin/serve.mjs",
+    "find": "node bin/find.mjs"
+  },
+  "keywords": [
+    "tabletop",
+    "board-game",
+    "uno",
+    "doudizhu",
+    "exploding-kittens",
+    "liars-bar",
+    "multiplayer",
+    "lan",
+    "websocket",
+    "lan-party",
+    "zero-dependency",
+    "server-authoritative"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
