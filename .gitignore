@@ -40,6 +40,11 @@ dsh-archived-ids-*.json
 优化大富翁游戏机制_2026-11-08_00-47.md
 重新链接Chrome插件_2026-11-07_00-59.md
 
+# ===== 内部工作文档（非公开发布内容） =====
+DELIVERY.md
+HANDOFF-remaining.md
+guozhan-架构深度研究报告.md
+
 # ===== 编辑器 / 操作系统 =====
 .DS_Store
 Thumbs.db
