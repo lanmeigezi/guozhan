@@ -561,8 +561,16 @@ export function createHttpHandler(deps: HttpDeps): (req: IncomingMessage, res: S
         if (svc.isBanned(roomId, ctx.user.id)) {
           throw new HttpError(403, 'ROOM_BANNED', '你已被该房间封禁，无法加入');
         }
+        // 观战席位是全知分支（ADR 0008 的显式设计），由发放方决定；
+        // 迷雾的修复点在"读历史/战报"通道：所有非观战接收者一律按 viewer 投影。
         const existing = svc.getMember(roomId, ctx.user.id);
         if (existing) {
+          // ★席位归属复核：成员关系表以 (room_id,user_id) 为主键，不阻止两个账号
+          //   指向同一 seat_id。重启后若不复核，reclaimSeat 会把别人的席位重签给自己。
+          const holder = svc.getMemberBySeat(roomId, existing.seatId);
+          if (holder && holder.userId !== ctx.user.id) {
+            throw new HttpError(409, 'SEAT_OCCUPIED', '该席位已被其他账号持有');
+          }
           const reclaimed = await roomManager.reclaimSeat(roomId, existing.seatId);
           if (reclaimed) {
             sendJson(res, 200, { seat: reclaimed.seat, token: reclaimed.token }, cors);
@@ -571,10 +579,27 @@ export function createHttpHandler(deps: HttpDeps): (req: IncomingMessage, res: S
           // 原席位已不存在/AI 接管：清掉旧关系后按普通加入处理
           svc.removeMember(roomId, ctx.user.id);
         }
-        const joined = await roomManager.joinRoom(roomId, {
-          ...(body.seatId !== undefined ? { seatId: body.seatId } : {}),
-          ...(body.asSpectator !== undefined ? { asSpectator: body.asSpectator } : {}),
-        });
+        // ★显式指定席位时，先确认该席位没有别的账号持有；否则 joinRoom 会先改状态、
+        //   setMember 再失败，留下"席位已换人但成员关系没落库"的不一致状态。
+        if (body.seatId !== undefined) {
+          const holder = svc.getMemberBySeat(roomId, body.seatId);
+          if (holder && holder.userId !== ctx.user.id) {
+            throw new HttpError(409, 'SEAT_OCCUPIED', '该席位已被其他账号持有');
+          }
+        }
+        let joined: Awaited<ReturnType<RoomManager['joinRoom']>>;
+        try {
+          joined = await roomManager.joinRoom(roomId, {
+            ...(body.seatId !== undefined ? { seatId: body.seatId } : {}),
+            ...(body.asSpectator !== undefined ? { asSpectator: body.asSpectator } : {}),
+          });
+        } catch (err) {
+          // 席位已有持久化 controller（含服务重启后）⇒ 不是内部错误，是明确的占用冲突
+          if (err instanceof Error && /席位.*已被占用|没有可认领的席位/.test(err.message)) {
+            throw new HttpError(409, 'SEAT_OCCUPIED', err.message);
+          }
+          throw err;
+        }
         svc.setMember(roomId, ctx.user.id, joined.seat.seatId);
         sendJson(res, 200, { seat: joined.seat, token: joined.token }, cors);
         return;
@@ -790,8 +815,9 @@ export function createHttpHandler(deps: HttpDeps): (req: IncomingMessage, res: S
         throw new HttpError(400, RejectionCode.MALFORMED_PAYLOAD, `回合号必须是整数：${turnRaw}`);
       }
       const ctx = await authenticate(deps, req);
-      requireSeat(ctx, roomId);
-      const report = await roomManager.getTurnReport(roomId, turn);
+      const { recipient } = requireSeat(ctx, roomId);
+      // ★战报必须按接收者投影：不能让 /turns/1 成为 /memory 迷雾裁剪的旁路
+      const report = await roomManager.getTurnReport(roomId, turn, recipient);
       if (report === null) {
         sendError(res, 404, 'NOT_FOUND', `第 ${turn} 回合战报不存在`, cors);
         return;

@@ -56,6 +56,11 @@ import { archetypeForFaction, assignAiArchetypes } from '../../ai/archetypes.ts'
 import type { AiArchetype } from '../../protocol/snapshot.ts';
 
 import { buildSnapshot } from './snapshot.ts';
+import {
+  projectEventForViewer,
+  projectTurnReportForViewer,
+  type ReportViewer,
+} from './report-projection.ts';
 import type {
   EventBatch,
   MatchMemory,
@@ -154,7 +159,17 @@ export class RoomManagerImpl implements RoomManager {
   private readonly llm: LlmClient;
   private readonly advisor: AiAdvisor;
   private readonly rooms = new Map<string, Runtime>();
-  private readonly tokens = new Map<string, { roomId: string; seatId: SeatId }>();
+  /**
+   * ★席位归属索引：controllerId（= sha256(token).slice(0,24)，已持久化在 seat.controller）→ 房间/席位。
+   *   旧实现把 **原始令牌 → 席位** 只放进程内存，服务一重启就空，claimable() 便把所有已被
+   *   认领的席位误判成"可认领"，其他账号据此抢占（安全缺陷 3）。
+   *   现在以持久化的 controller 为唯一归属凭据：令牌可跨重启复现，席位一旦有 controller
+   *   就永远不可被 joinRoom 抢占，只有 revokeSeat / reclaimSeat 能改变归属。
+   */
+  private readonly controllers = new Map<string, { roomId: string; seatId: SeatId }>();
+  private controllerIndexReady = false;
+  /** 席位失效广播：撤销/重签/删房时通知 MCP/WS 适配器立即断开长连接会话 */
+  private readonly seatInvalidationListeners = new Set<(roomId: string, seatId: SeatId | null) => void>();
   private readonly alertConfigs: readonly AlertConfigEntry[];
   private readonly autoAdvice: boolean;
   /** 人格来自静态 factions.json，读一次即可；避免每回合每席位重复读盘 */
@@ -180,6 +195,63 @@ export class RoomManagerImpl implements RoomManager {
       newAdviceId: () => `adv_${nowMs().toString(36)}_${randomBytes(4).toString('hex')}`,
       now: nowMs,
     });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 席位归属索引（持久化）与失效广播
+  // ─────────────────────────────────────────────────────────────
+
+  /** 首次访问时从已落库的 seat.controller 重建索引 —— 这是跨重启仍认得令牌的关键 */
+  private ensureControllerIndex(): void {
+    if (this.controllerIndexReady) return;
+    this.controllerIndexReady = true;
+    for (const entry of this.index.list()) {
+      try {
+        for (const s of this.store.loadSeats(entry.roomId)) {
+          if (s.controllerId !== null) {
+            this.controllers.set(s.controllerId, { roomId: entry.roomId, seatId: s.seatId });
+          }
+        }
+      } catch {
+        // 单个房间库损坏/文件缺失不应拖垮全局索引；该房间的席位不会被认出（fail-closed）
+      }
+    }
+  }
+
+  /** 席位写入后同步归属索引；先摘掉该席位旧 controller，再挂新的 */
+  private syncController(roomId: string, seat: SeatInfo): void {
+    for (const [cid, ref] of this.controllers) {
+      if (ref.roomId === roomId && ref.seatId === seat.seatId && cid !== seat.controllerId) {
+        this.controllers.delete(cid);
+      }
+    }
+    if (seat.controllerId !== null) {
+      this.controllers.set(seat.controllerId, { roomId, seatId: seat.seatId });
+    }
+  }
+
+  private dropControllersForSeat(roomId: string, seatId: SeatId): void {
+    for (const [cid, ref] of this.controllers) {
+      if (ref.roomId === roomId && ref.seatId === seatId) this.controllers.delete(cid);
+    }
+  }
+
+  /** 通知所有长连接适配器：这些席位的令牌已失效，立即断开对应会话 */
+  private emitSeatInvalidated(roomId: string, seatId: SeatId | null): void {
+    for (const listener of this.seatInvalidationListeners) {
+      try {
+        listener(roomId, seatId);
+      } catch {
+        // 单个适配器回调失败不影响其余订阅者，也不影响撤销本身
+      }
+    }
+  }
+
+  onSeatInvalidated(listener: (roomId: string, seatId: SeatId | null) => void): Unsubscribe {
+    this.seatInvalidationListeners.add(listener);
+    return () => {
+      this.seatInvalidationListeners.delete(listener);
+    };
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -361,10 +433,19 @@ export class RoomManagerImpl implements RoomManager {
         rt.subscribers.clear();
         this.rooms.delete(roomId);
       }
-      for (const [token, ref] of this.tokens) if (ref.roomId === roomId) this.tokens.delete(token);
+      // ★删房 = 该房间所有席位令牌作废，通知长连接立刻断开（不留幽灵会话）
+      this.ensureControllerIndex();
+      this.dropControllersForRoom(roomId);
+      this.emitSeatInvalidated(roomId, null);
       this.store.destroyRoom(roomId);
       this.index.remove(roomId);
     });
+  }
+
+  private dropControllersForRoom(roomId: string): void {
+    for (const [cid, ref] of this.controllers) {
+      if (ref.roomId === roomId) this.controllers.delete(cid);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -376,6 +457,7 @@ export class RoomManagerImpl implements RoomManager {
     input: { seatId?: SeatId; asSpectator?: boolean },
   ): Promise<{ seat: SeatInfo; token: string }> {
     const rt = this.ensure(roomId);
+    this.ensureControllerIndex();
     const token = `gz_${randomBytes(24).toString('base64url')}`;
     const controllerId = sha256(token).slice(0, 24);
     const now = nowMs();
@@ -397,14 +479,18 @@ export class RoomManagerImpl implements RoomManager {
       };
       rt.seats.set(seat.seatId, seat);
       this.persistSeat(roomId, seat, now);
-      this.tokens.set(token, { roomId, seatId: seat.seatId });
+      this.controllers.set(controllerId, { roomId, seatId: seat.seatId });
       return { seat, token };
     }
 
+    /**
+     * ★席位一旦有持久化 controller 就不可被认领 —— 不看进程内有没有"活令牌"。
+     *   旧实现用 `!hasLiveTokenFor()` 作逃逸口：服务重启后 tokens Map 为空，
+     *   所有已被认领的席位都被判成"可认领"，任何其他账号都能 joinRoom 抢占。
+     *   只有 revokeSeat（踢人/离开）或 deleteRoom 会把 controller 清空。
+     */
     const claimable = (s: SeatInfo): boolean =>
-      s.kind !== 'spectator' &&
-      s.factionId !== null &&
-      (s.controllerId === null || !this.hasLiveTokenFor(roomId, s.seatId));
+      s.kind !== 'spectator' && s.factionId !== null && s.controllerId === null;
 
     let target: SeatInfo | undefined;
     if (input.seatId !== undefined) {
@@ -430,7 +516,7 @@ export class RoomManagerImpl implements RoomManager {
     rt.seats.set(seat.seatId, seat);
     if (seat.factionId !== null) rt.aiArchetypes.delete(seat.factionId);
     this.persistSeat(roomId, seat, now);
-    this.tokens.set(token, { roomId, seatId: seat.seatId });
+    this.controllers.set(controllerId, { roomId, seatId: seat.seatId });
     this.touch(rt);
     // ★第一个真人入场 = 开局；此前 AI 不得自行推进回合
     if (!rt.started) {
@@ -441,11 +527,19 @@ export class RoomManagerImpl implements RoomManager {
   }
 
   async resumeSeat(token: string): Promise<{ room: RoomInfo; seat: SeatInfo } | null> {
-    const ref = this.tokens.get(token);
+    if (token.length === 0) return null;
+    this.ensureControllerIndex();
+    // controllerId 就是 sha256(token) 的前 24 位，且已落库 —— 重启后无需原始令牌表也能验证
+    const controllerId = sha256(token).slice(0, 24);
+    const ref = this.controllers.get(controllerId);
     if (!ref) return null;
     const rt = this.ensure(ref.roomId);
     const seat = rt.seats.get(ref.seatId);
-    if (!seat || seat.controllerId !== sha256(token).slice(0, 24)) return null;
+    if (!seat || seat.controllerId !== controllerId) {
+      // 索引与权威状态不一致 ⇒ 以状态为准，摘掉陈旧索引（fail-closed）
+      this.controllers.delete(controllerId);
+      return null;
+    }
     return { room: this.infoOf(rt), seat };
   }
 
@@ -479,9 +573,10 @@ export class RoomManagerImpl implements RoomManager {
     const rt = this.ensure(roomId);
     const seat = rt.seats.get(seatId);
     if (!seat) return null;
-    for (const [token, ref] of this.tokens) {
-      if (ref.roomId === roomId && ref.seatId === seatId) this.tokens.delete(token);
-    }
+    // ★撤销令牌必须同时抹掉持久化归属索引 + 广播失效，否则旧令牌/MCP 会话仍能跨重启复活
+    this.ensureControllerIndex();
+    this.dropControllersForSeat(roomId, seatId);
+    this.emitSeatInvalidated(roomId, seatId);
     let next: SeatInfo = { ...seat, controllerId: null, connected: false };
     if (opts.asAi === true && seat.kind !== 'spectator') {
       next = { ...next, kind: 'ai', autoCommit: false, llmDriven: false, aiProfile: null };
@@ -497,23 +592,25 @@ export class RoomManagerImpl implements RoomManager {
 
   async reclaimSeat(roomId: string, seatId: SeatId): Promise<{ seat: SeatInfo; token: string } | null> {
     const rt = this.ensure(roomId);
+    this.ensureControllerIndex();
     const seat = rt.seats.get(seatId);
     // AI 席位不能凭账号直接变回真人；请走 joinRoom 认领空席位。
     if (!seat || seat.kind === 'ai') return null;
-    for (const [token, ref] of this.tokens) {
-      if (ref.roomId === roomId && ref.seatId === seatId) this.tokens.delete(token);
-    }
+    // ★重签令牌 = 旧令牌立即作废，广播给长连接会话
+    this.dropControllersForSeat(roomId, seatId);
+    this.emitSeatInvalidated(roomId, seatId);
     const token = `gz_${randomBytes(24).toString('base64url')}`;
+    const controllerId = sha256(token).slice(0, 24);
     const next: SeatInfo = {
       ...seat,
       kind: seat.kind === 'spectator' ? 'spectator' : 'human',
       autoCommit: false,
       connected: true,
-      controllerId: sha256(token).slice(0, 24),
+      controllerId,
     };
     rt.seats.set(seatId, next);
     this.persistSeat(roomId, next, nowMs());
-    this.tokens.set(token, { roomId, seatId });
+    this.controllers.set(controllerId, { roomId, seatId });
     this.touch(rt);
     return { seat: next, token };
   }
@@ -562,9 +659,37 @@ export class RoomManagerImpl implements RoomManager {
     return this.ensure(roomId).scenario.mapLayout;
   }
 
-  async getTurnReport(roomId: string, turn: number): Promise<TurnReport | null> {
-    this.ensure(roomId);
-    return this.store.loadTurn(roomId, turn);
+  async getTurnReport(
+    roomId: string,
+    turn: number,
+    recipient: SeatId | 'spectator',
+  ): Promise<TurnReport | null> {
+    const rt = this.ensure(roomId);
+    const report = this.store.loadTurn(roomId, turn);
+    if (report === null) return null;
+    const viewer = this.viewerOf(rt, recipient);
+    if (viewer.full) return report; // 管理/观战：显式的全知分支
+    // 事件受众以 event_log 写库时算好的 audience_json 为准（回合前后状态并集），
+    // 不在读取时用"当前状态"重算 —— 部队战死后查不到 ownerId 会误判受众。
+    const visibleKeys = new Set<string>();
+    for (const row of this.store.readEventRows(roomId, 0, 1_000_000)) {
+      if (row.turn !== turn) continue;
+      if (viewer.factionId !== null && audienceIncludes(row.audience, viewer.factionId)) {
+        visibleKeys.add(stableStringify(row.payload));
+      }
+    }
+    return projectTurnReportForViewer(report, viewer, visibleKeys, stableStringify);
+  }
+
+  /** 接收者 → 投影视图。取不到身份一律 fail-closed（不给任何明细） */
+  private viewerOf(rt: Runtime, recipient: SeatId | 'spectator'): ReportViewer {
+    if (recipient === 'spectator') return { full: true, factionId: null, seatId: null };
+    const seat = rt.seats.get(recipient);
+    if (!seat) throw new Error(`席位不存在：${recipient}`);
+    // 观战席位无论以 seatId 还是 'spectator' 寻址，都是显式的全知分支
+    if (seat.kind === 'spectator') return { full: true, factionId: null, seatId: seat.seatId };
+    // 非观战席位却缺 factionId ⇒ 数据异常，按 fail-closed 投影成空骨架
+    return { full: false, factionId: seat.factionId, seatId: seat.seatId };
   }
 
   async getMatchMemory(roomId: string, recipient: SeatId | 'spectator'): Promise<MatchMemory> {
@@ -574,11 +699,16 @@ export class RoomManagerImpl implements RoomManager {
     const seat = recipient === 'spectator' ? null : rt.seats.get(recipient) ?? null;
     if (recipient !== 'spectator' && !seat) throw new Error(`席位不存在：${recipient}`);
     // 观战端/观战席位拿全知版本；玩家席位只拿自己可见的部分，绝不通过记忆接口绕过迷雾。
-    const full = recipient === 'spectator' || seat?.kind === 'spectator';
-    const viewerFaction = full ? null : seat?.factionId ?? null;
-    const viewerSeatId = seat?.seatId ?? null;
+    const viewer = this.viewerOf(rt, recipient);
+    const full = viewer.full;
+    const viewerFaction = viewer.factionId;
+    const viewerSeatId = viewer.seatId;
     const eventRows = this.store.readEventRows(roomId, 1);
-    const visibleEvents = eventRows.filter((e) => full || (!viewerFaction || audienceIncludes(e.audience, viewerFaction)));
+    // ★旧实现 `!viewerFaction || audienceIncludes(...)`：factionId 为空时"放行全部事件"，
+    //   是一个 fail-open 逃逸口。现在身份不明 ⇒ 一条事件都不给。
+    const visibleEvents = eventRows.filter(
+      (e) => full || (viewerFaction !== null && audienceIncludes(e.audience, viewerFaction)),
+    );
     const eventsByTurn = new Map<number, typeof visibleEvents>();
     for (const e of visibleEvents) {
       const list = eventsByTurn.get(e.turn) ?? [];
@@ -594,7 +724,9 @@ export class RoomManagerImpl implements RoomManager {
         turn: report.turn,
         stateDigest: report.stateDigest,
         resolvedAt: report.resolvedAt,
-        events: (eventsByTurn.get(turn) ?? []).map((e) => e.payload as DomainEvent),
+        events: (eventsByTurn.get(turn) ?? [])
+          .map((e) => projectEventForViewer(e.payload as DomainEvent, viewer))
+          .filter((e): e is DomainEvent => e !== null),
         orders: full
           ? report.orders
           : report.orders.filter((o) => o.seatId === viewerSeatId),
@@ -651,12 +783,10 @@ export class RoomManagerImpl implements RoomManager {
         llmDriven: s.llmDriven,
       })),
       turns,
-      events: visibleEvents.map((e) => ({
-        offset: e.offset,
-        turn: e.turn,
-        type: e.type,
-        payload: e.payload,
-      })),
+      events: visibleEvents.flatMap((e) => {
+        const projected = projectEventForViewer(e.payload as DomainEvent, viewer);
+        return projected === null ? [] : [{ offset: e.offset, turn: e.turn, type: e.type, payload: projected }];
+      }),
       messages: messages.map((m) => ({ ...m })),
     };
   }
@@ -1673,10 +1803,16 @@ export class RoomManagerImpl implements RoomManager {
 
   private projectRows(rt: Runtime, recipient: SeatId | 'spectator', rows: readonly EventRow[]): EventBatch | null {
     if (rows.length === 0) return null;
-    const faction = recipient === 'spectator' ? 'spectator' : (rt.seats.get(recipient)?.factionId ?? null);
-    const visible = rows
-      .filter((r) => audienceIncludes(r.audience, faction))
-      .map((r) => ({ offset: r.offset, event: r.payload as DomainEvent }));
+    // ★旧实现把"找不到席位"折叠成 faction=null，而 audienceIncludes(audience, null)
+    //   返回 true == 全量放行。现在席位不存在直接不投递（fail-closed），不抛错打断补发。
+    if (recipient !== 'spectator' && !rt.seats.has(recipient)) return null;
+    const viewer = this.viewerOf(rt, recipient);
+    const visible = rows.flatMap((r) => {
+      const allowed = viewer.full || (viewer.factionId !== null && audienceIncludes(r.audience, viewer.factionId));
+      if (!allowed) return [];
+      const projected = projectEventForViewer(r.payload as DomainEvent, viewer);
+      return projected === null ? [] : [{ offset: r.offset, event: projected }];
+    });
     if (visible.length === 0) return null;
     return {
       roomId: rt.roomId,
@@ -1734,17 +1870,15 @@ export class RoomManagerImpl implements RoomManager {
     };
   }
 
-  private hasLiveTokenFor(roomId: string, seatId: SeatId): boolean {
-    for (const ref of this.tokens.values()) if (ref.roomId === roomId && ref.seatId === seatId) return true;
-    return false;
-  }
-
   private nextOrderIndex(rt: Runtime, seatId: SeatId): number {
     const rows = this.store.loadPendingOrders(rt.roomId, rt.state.turn).filter((r) => r.seatId === seatId);
     return rows.length === 0 ? 0 : Math.max(...rows.map((r) => r.index)) + 1;
   }
 
   private persistSeat(roomId: string, seat: SeatInfo, joinedAt: number): void {
+    // 任何席位写入都同步归属索引，保证内存索引与落库状态逐位一致
+    this.ensureControllerIndex();
+    this.syncController(roomId, seat);
     this.store.saveSeat(roomId, {
       seatId: seat.seatId,
       kind: seat.kind,

@@ -88,10 +88,16 @@ export function unionAudience(a: Audience, b: Audience): Audience {
   return dedupe([...a, ...b]);
 }
 
-/** 某接收者是否该收到该事件。观战端（全知视图）恒为 true */
+/**
+ * 某接收者是否该收到该事件。
+ * · 'spectator' = 显式的全知分支，恒 true。
+ * · null = **身份未知 / 席位不存在**：fail-closed，只放行公开广播（'all'）。
+ *   旧实现把 null 当成全知放行，任何"查不到归属"的路径都会把隐藏事件整批漏出去。
+ */
 export function audienceIncludes(audience: Audience, recipientFaction: string | 'spectator' | null): boolean {
-  if (recipientFaction === 'spectator' || recipientFaction === null) return true;
+  if (recipientFaction === 'spectator') return true;
   if (audience === 'all') return true;
+  if (recipientFaction === null) return false;
   return audience.includes(recipientFaction);
 }
 

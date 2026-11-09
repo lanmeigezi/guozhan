@@ -107,7 +107,7 @@ test('★全 AI 房间自动跑到结局，并在 ended 后停住', async () => 
   assert.equal(after!.phase, 'ended');
 
   // 首回合战报应完整（证明是真的按回合结算，而不是一次性跳到结局）
-  const first = await m.getTurnReport(room.roomId, 1);
+  const first = await m.getTurnReport(room.roomId, 1, 'spectator');
   assert.ok(first);
   assert.ok(first!.baseline.length > 0, '第 1 回合必须有逐字段基线');
   // 至少打完了 maxTurns 里的大部分回合（战争/征服可能提前结束，turns 必须 > 1）
@@ -132,7 +132,7 @@ test('★第二模式（六角棋盘 + 水路）全 AI 自动局也能收敛，�
   }
   assert.equal(info!.phase, 'ended', `60 秒内应跑到结局（当前 turn=${info!.turn}, phase=${info!.phase}）`);
   assert.ok(info!.turn > 1, '至少应结算过一回合');
-  const report = await m.getTurnReport(room.roomId, 1);
+  const report = await m.getTurnReport(room.roomId, 1, 'spectator');
   assert.ok(report && report.baseline.length > 0, '第 1 回合应有逐字段基线');
 });
 

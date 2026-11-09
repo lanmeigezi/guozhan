@@ -303,7 +303,7 @@ test('全员锁定 ⇒ 自动结算；回合推进、战报落库、事件可订
   assert.equal(after!.turn, 2, '结算后应推进到第 2 回合');
   assert.notEqual(after!.stateDigest, room.stateDigest, '结算必须改变 state_digest');
 
-  const report = await m.getTurnReport(room.roomId, 1);
+  const report = await m.getTurnReport(room.roomId, 1, 'spectator');
   assert.ok(report !== null, '第 1 回合战报必须落库');
   assert.equal(report!.turn, 1);
   assert.ok(report!.baseline.length > 0, '确定性基线必须有逐字段归因');
@@ -377,9 +377,20 @@ test('重启恢复：新 manager 读回同一 digest、回合与席位', async (
   assert.equal(after!.stateDigest, before!.stateDigest, '重启不得改变权威状态');
   assert.equal(after!.turn, before!.turn);
   assert.equal(after!.seats.length, before!.seats.length);
-  // 重启后仍可继续玩：旧令牌失效（进程内令牌），但可重新认领席位
-  const rejoin = await m2.joinRoom(room.roomId, { seatId: 'seat_qin' });
-  assert.equal(rejoin.seat.factionId, 'qin');
+  // ★重启后席位归属仍在（seat.controller 已落库）：旧令牌继续有效，
+  //   其他账号不能借"进程内令牌表为空"抢占。旧断言允许重新认领，正是被修掉的缺陷 3。
+  const qinToken = seats.get('qin')!;
+  const resumed = await m2.resumeSeat(qinToken);
+  assert.equal(resumed?.seat.factionId, 'qin', '重启后原席位令牌必须仍可复现');
+  await assert.rejects(
+    () => m2.joinRoom(room.roomId, { seatId: 'seat_qin' }),
+    /已被占用|没有可认领的席位/,
+    '其他账号不得在重启后抢占已认领席位',
+  );
+  // 合法的重签路径：reclaimSeat 显式旋转令牌（由账号成员关系校验后调用）
+  const reclaimed = await m2.reclaimSeat(room.roomId, 'seat_qin');
+  assert.ok(reclaimed, '房主/账号走 reclaimSeat 仍可重签');
+  assert.equal(await m2.resumeSeat(qinToken), null, '重签后旧令牌必须立刻失效');
 });
 
 test('AI 席位：LLM 未配置 ⇒ 启发式决策仍会走同一条提交通道', async () => {
@@ -407,7 +418,7 @@ test('AI 席位：LLM 未配置 ⇒ 启发式决策仍会走同一条提交通�
 
   const after = await m.getRoom(room.roomId);
   assert.equal(after!.turn, 2, '全员锁定后应自动结算推进到第 2 回合');
-  const report = await m.getTurnReport(room.roomId, 1);
+  const report = await m.getTurnReport(room.roomId, 1, 'spectator');
   assert.ok(report !== null);
   assert.ok(
     report!.orders.some((o) => o.seatId === 'seat_wei'),

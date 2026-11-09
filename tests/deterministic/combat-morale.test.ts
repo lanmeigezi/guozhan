@@ -35,6 +35,10 @@ function clone(): GameState {
   return JSON.parse(JSON.stringify(sc.initialState)) as GameState;
 }
 
+/** resolveTurn 的 events 是 unknown[]（协议层才收敛成 DomainEvent），断言前先按形状收窄 */
+const eventsOf = (out: ReturnType<typeof run>): Array<{ type: string }> =>
+  out.events as Array<{ type: string }>;
+
 function firstAttack(state: GameState, needDefenders = false) {
   const fid = Object.keys(state.factions).sort()[0]!;
   const attacks = enumerateLegalActions(state, sc.world, fid, { maxActions: 200 }).filter((a) => a.kind === 'attack');
@@ -61,8 +65,8 @@ test('守城成功：进攻未能破城（僵持/击退），守方获得 +3 士
   (state.units[unitId] as { troops: number }).troops = 1;
 
   const out = run(state, [order(fid, { ...action.command, commitment: 0.1 }, 0)]);
-  assert.equal(out.events.filter((e) => e.type === 'combat_resolved').length, 1);
-  assert.equal(out.events.some((e) => e.type === 'region_captured'), false, '不该夺城');
+  assert.equal(eventsOf(out).filter((e) => e.type === 'combat_resolved').length, 1);
+  assert.equal(eventsOf(out).some((e) => e.type === 'region_captured'), false, '不该夺城');
   const bonus = out.deltas.find(
     (d) => d.scope === `faction:${defender}` && d.field === 'morale' && /士气大振/.test(d.reason),
   );
@@ -81,11 +85,11 @@ test('夺回失地：除攻取 +5 外再给 +6 民心，且只在收复时给', 
   (state.regions[rid] as { owner: string }).owner = enemy!;
   (state.regions[rid] as { lastOwner?: string }).lastOwner = fid;
   for (const [uid, u] of Object.entries(state.units)) {
-    if (u.regionId === rid && u.ownerId !== fid) delete state.units[uid];
+    if (u.regionId === rid && u.ownerId !== fid) delete (state.units as Record<string, unknown>)[uid];
   }
 
   const out = run(state, [order(fid, { ...action.command, commitment: 1 }, 0)]);
-  assert.ok(out.events.some((e) => e.type === 'region_captured'), '清空守军后应夺城');
+  assert.ok(eventsOf(out).some((e) => e.type === 'region_captured'), '清空守军后应夺城');
   const capture = out.deltas.find((d) => d.scope === `faction:${fid}` && d.field === 'morale' && /攻取/.test(d.reason));
   const recap = out.deltas.find((d) => d.scope === `faction:${fid}` && d.field === 'morale' && /收复故土/.test(d.reason));
   assert.ok(capture && capture.delta === 5, '基础夺城 +5 仍在');
@@ -98,12 +102,12 @@ test('夺回失地：除攻取 +5 外再给 +6 民心，且只在收复时给', 
   const rid2 = String(a2.action.command['targetRegion']);
   const enemy2 = state2.regions[rid2]!.owner!;
   (state2.regions[rid2] as { owner: string }).owner = enemy2;
-  (state2.regions[rid2] as { lastOwner?: string }).lastOwner = null;
+  (state2.regions[rid2] as { lastOwner?: string | null }).lastOwner = null;
   for (const [uid, u] of Object.entries(state2.units)) {
-    if (u.regionId === rid2 && u.ownerId !== a2.fid) delete state2.units[uid];
+    if (u.regionId === rid2 && u.ownerId !== a2.fid) delete (state2.units as Record<string, unknown>)[uid];
   }
   const out2 = run(state2, [order(a2.fid, { ...a2.action.command, commitment: 1 }, 0)]);
-  assert.ok(out2.events.some((e) => e.type === 'region_captured'));
+  assert.ok(eventsOf(out2).some((e) => e.type === 'region_captured'));
   assert.equal(
     out2.deltas.some((d) => d.field === 'morale' && /收复故土/.test(d.reason)),
     false,

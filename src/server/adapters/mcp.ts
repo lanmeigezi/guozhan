@@ -294,7 +294,12 @@ export const MCP_TOOLS: readonly McpToolDef[] = Object.freeze([
     inputSchema: z.object({ turn: z.number().int().min(0).max(100000) }).strict(),
     handler: async (ctx, args) => {
       const { turn } = args as { turn: number };
-      const report = await ctx.roomManager.getTurnReport(ctx.principal.roomId, turn);
+      // ★战报也要按接收者投影：MCP 不能成为快照/记忆迷雾裁剪的旁路
+      const report = await ctx.roomManager.getTurnReport(
+        ctx.principal.roomId,
+        turn,
+        recipientOf(ctx.principal),
+      );
       if (report === null) return toolError('NOT_FOUND', `第 ${turn} 回合战报不存在`);
       return ok(report);
     },
@@ -324,6 +329,9 @@ interface SessionEntry {
   readonly transport: StreamableHTTPServerTransport;
   readonly server: McpServer;
   readonly principal: Principal;
+  /** initialize 时的席位令牌。每次请求都要重解析，不能只信会话建立那一刻的身份 */
+  readonly token: string;
+  closed: boolean;
   unsubscribe: (() => void) | null;
 }
 
@@ -386,7 +394,7 @@ export function createMcpAdapter(deps: McpAdapterDeps): McpHttpHandler {
     sendJson(res, 200, { jsonrpc: '2.0', id, error: { code, message } }, { ...cors, 'Content-Type': 'application/json' });
   }
 
-  async function createSession(principal: Principal): Promise<SessionEntry> {
+  async function createSession(principal: Principal, token: string): Promise<SessionEntry> {
     const server = new McpServer(
       { name: 'guozhan', version: '0.2.0' },
       { instructions: MCP_INSTRUCTIONS },
@@ -400,7 +408,11 @@ export function createMcpAdapter(deps: McpAdapterDeps): McpHttpHandler {
           inputSchema: tool.inputSchema as never,
         },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (async (args: unknown) => tool.handler({ principal, roomManager: deps.roomManager }, args as never)) as never,
+        (async (args: unknown) => {
+          // ★每次工具调用都复核会话仍然有效（令牌可能已被踢/撤销/重签）
+          if (!(await sessionStillValid(entry))) return toolError('SESSION_REVOKED', '席位令牌已失效，请重新建立 MCP 会话');
+          return tool.handler({ principal, roomManager: deps.roomManager }, args as never);
+        }) as never,
       );
     }
 
@@ -408,18 +420,21 @@ export function createMcpAdapter(deps: McpAdapterDeps): McpHttpHandler {
       transport: null as unknown as StreamableHTTPServerTransport,
       server,
       principal,
+      token,
+      closed: false,
       unsubscribe: null,
     };
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: SESSION_ID_GENERATOR, // ★有状态：保留 server→client 推送能力
       enableJsonResponse: true,
-      onsessioninitialized: (sessionId: string) => {
-        sessions.set(sessionId, entry);
+      onsessioninitialized: (initializedId: string) => {
+        sessions.set(initializedId, entry);
         void startEventPush(entry);
       },
     });
     (entry as { transport: StreamableHTTPServerTransport }).transport = transport;
     transport.onclose = () => {
+      entry.closed = true;
       entry.unsubscribe?.();
       entry.unsubscribe = null;
       for (const [id, e] of sessions) {
@@ -430,6 +445,41 @@ export function createMcpAdapter(deps: McpAdapterDeps): McpHttpHandler {
     return entry;
   }
 
+  /**
+   * ★会话有效性复核：actor 身份只从"当前仍然有效的令牌"推导。
+   *   旧实现把 Principal 在 initialize 时冻结进会话，revokeSeat / reclaimSeat 之后
+   *   旧会话照样能 submit_orders / get_situation —— 踢人形同虚设。
+   */
+  async function sessionStillValid(entry: SessionEntry): Promise<boolean> {
+    if (entry.closed) return false;
+    const current = await deps.auth.resolvePrincipal(entry.token);
+    if (current === null) return false;
+    const p = entry.principal;
+    return (
+      current.roomId === p.roomId &&
+      current.seatId === p.seatId &&
+      current.kind === p.kind &&
+      current.factionId === p.factionId &&
+      current.readOnly === p.readOnly
+    );
+  }
+
+  /** 主动关闭会话（含 SSE 流），使撤销立即生效而不必等下一次请求 */
+  async function closeSession(entry: SessionEntry): Promise<void> {
+    if (entry.closed) return;
+    entry.closed = true;
+    entry.unsubscribe?.();
+    entry.unsubscribe = null;
+    for (const [id, e] of sessions) {
+      if (e === entry) sessions.delete(id);
+    }
+    try {
+      await entry.transport.close();
+    } catch {
+      /* 已关闭 */
+    }
+  }
+
   /** 回合结算后主动推送：与 WS 侧同一份事件流（subscribe + notifications/message） */
   async function startEventPush(entry: SessionEntry): Promise<void> {
     const { principal } = entry;
@@ -437,28 +487,35 @@ export function createMcpAdapter(deps: McpAdapterDeps): McpHttpHandler {
     try {
       const from = await deps.roomManager.nextOffset(principal.roomId);
       entry.unsubscribe = deps.roomManager.subscribe(principal.roomId, recipient, from, (batch) => {
-        for (const { offset, event } of batch.events) {
-          // ★直接走**本会话自己的** transport，而不是 McpServer.notification()：
-          //   后者在多会话下依赖内部的 _transport 指针，一旦没接上就抛 Not connected，
-          //   而错误又被 catch 吞掉 —— 正是「静默失败」的典型。显式按会话路由。
-          void entry.transport
-            .send({
-              jsonrpc: '2.0',
-              method: 'notifications/message',
-              params: {
-                level: 'info',
-                logger: 'guozhan',
-                data: { type: 'domain_event', offset, turn: batch.turn, stateDigest: batch.stateDigest, event },
-              },
-            })
-            .catch((err: unknown) => {
+        // ★推送前也复核：踢人后 SSE 流不该继续把事件送给旧会话
+        if (entry.closed) return;
+        void (async () => {
+          if (!(await sessionStillValid(entry))) {
+            await closeSession(entry);
+            return;
+          }
+          for (const { offset, event } of batch.events) {
+            // ★直接走**本会话自己的** transport，而不是 McpServer.notification()：
+            //   后者在多会话下依赖内部的 _transport 指针，一旦没接上就抛 Not connected，
+            //   而错误又被 catch 吞掉 —— 正是「静默失败」的典型。显式按会话路由。
+            try {
+              await entry.transport.send({
+                jsonrpc: '2.0',
+                method: 'notifications/message',
+                params: {
+                  level: 'info',
+                  logger: 'guozhan',
+                  data: { type: 'domain_event', offset, turn: batch.turn, stateDigest: batch.stateDigest, event },
+                },
+              });
+            } catch (err: unknown) {
               // 客户端断开是常态，但要留痕（不再静默）；session onclose 会清理订阅
               process.stderr.write(
-                `guozhan: MCP 推送失败（session 可能已断开）—— ${err instanceof Error ? err.message : String(err)}
-`,
+                `guozhan: MCP 推送失败（session 可能已断开）—— ${err instanceof Error ? err.message : String(err)}\n`,
               );
-            });
-        }
+            }
+          }
+        })();
       });
     } catch {
       /* 房间不存在等：不推送，工具仍可用（读操作会如实报错） */
@@ -471,10 +528,26 @@ export function createMcpAdapter(deps: McpAdapterDeps): McpHttpHandler {
     return sessions.get(id) ?? null;
   }
 
+  // ★席位失效广播 → 立即关闭该席位/该房间的所有会话（含已建立的 SSE 流），
+  //   不等客户端下一次请求，也不给"令牌已撤销但流还在推"的窗口。
+  const unsubscribeInvalidation = deps.roomManager.onSeatInvalidated((roomId, seatId) => {
+    for (const entry of [...sessions.values()]) {
+      if (entry.principal.roomId !== roomId) continue;
+      if (seatId !== null && entry.principal.seatId !== seatId) continue;
+      void closeSession(entry);
+    }
+  });
+
   return {
     async handlePost(req, res, body, cors) {
       const existing = sessionFromRequest(req);
       if (existing !== null) {
+        // ★每次请求（含 tools/call、notifications）都复核令牌；撤销/重签后旧会话立刻失效
+        if (!(await sessionStillValid(existing))) {
+          await closeSession(existing);
+          sendError(res, 401, 'SESSION_REVOKED', '席位令牌已被撤销或重签，MCP 会话已关闭', cors);
+          return;
+        }
         // ★tools/call 预检：.strict() 拒绝多余字段，返回稳定的 MALFORMED_PAYLOAD 语义
         const invalid = preValidateToolCall(body);
         if (invalid !== null) {
@@ -504,7 +577,7 @@ export function createMcpAdapter(deps: McpAdapterDeps): McpHttpHandler {
         sendError(res, 401, 'UNAUTHORIZED', '席位令牌无效', cors);
         return;
       }
-      const entry = await createSession(principal);
+      const entry = await createSession(principal, token);
       await entry.transport.handleRequest(req, res, body);
     },
 
@@ -512,6 +585,11 @@ export function createMcpAdapter(deps: McpAdapterDeps): McpHttpHandler {
       const existing = sessionFromRequest(req);
       if (existing === null) {
         sendError(res, 400, 'MISSING_SESSION', 'GET /mcp 需要有效的 mcp-session-id 头（SSE 推送流）', cors);
+        return;
+      }
+      if (!(await sessionStillValid(existing))) {
+        await closeSession(existing);
+        sendError(res, 401, 'SESSION_REVOKED', '席位令牌已被撤销或重签，MCP 会话已关闭', cors);
         return;
       }
       await existing.transport.handleRequest(req, res);
@@ -530,9 +608,11 @@ export function createMcpAdapter(deps: McpAdapterDeps): McpHttpHandler {
     },
 
     async closeAll() {
+      unsubscribeInvalidation();
       const entries = [...sessions.values()];
       sessions.clear();
       for (const entry of entries) {
+        entry.closed = true;
         entry.unsubscribe?.();
         entry.unsubscribe = null;
         try {

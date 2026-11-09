@@ -230,7 +230,7 @@ test('★叙事后到：状态与战报先落库，叙事异步补写进 turn_re
 
   // 叙事单独生成后再读战报
   await m.generateNarratives(roomId, 1);
-  const withNarrative = await m.getTurnReport(roomId, 1);
+  const withNarrative = await m.getTurnReport(roomId, 1, 'spectator');
   assert.ok(withNarrative);
   assert.match(withNarrative!.narratives.seat_qin ?? '', /秦募新卒/, '叙事必须写回 turn_record');
 

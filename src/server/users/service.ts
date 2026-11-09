@@ -277,6 +277,12 @@ export class UserService {
   }
 
   setMember(roomId: string, userId: string, seatId: string): void {
+    // ★一个席位只能属于一个账号。room_members 主键是 (room_id,user_id)，本身不阻止
+    //   两个账号同时指向同一 seat_id；服务重启后这正是"其他账号抢占席位"的落库路径。
+    const holder = this.getMemberBySeat(roomId, seatId);
+    if (holder !== null && holder.userId !== userId) {
+      throw new UserServiceError(409, 'SEAT_OCCUPIED', '该席位已被其他账号持有');
+    }
     this.db
       .prepare(
         `INSERT INTO room_members (room_id, user_id, seat_id, joined_at) VALUES (?, ?, ?, ?)
@@ -293,6 +299,29 @@ export class UserService {
          WHERE m.room_id = ? AND m.user_id = ?`,
       )
       .get(roomId, userId) as
+      | { room_id: string; user_id: string; seat_id: string; joined_at: number; username: string; display_name: string }
+      | undefined;
+    return row
+      ? {
+          roomId: row.room_id,
+          userId: row.user_id,
+          username: row.username,
+          displayName: row.display_name,
+          seatId: row.seat_id,
+          joinedAt: row.joined_at,
+        }
+      : null;
+  }
+
+  /** 反查某个席位当前属于哪个账号（防跨账号抢占） */
+  getMemberBySeat(roomId: string, seatId: string): RoomMember | null {
+    const row = this.db
+      .prepare(
+        `SELECT m.room_id, m.user_id, m.seat_id, m.joined_at, u.username, u.display_name
+         FROM room_members m JOIN users u ON u.id = m.user_id
+         WHERE m.room_id = ? AND m.seat_id = ?`,
+      )
+      .get(roomId, seatId) as
       | { room_id: string; user_id: string; seat_id: string; joined_at: number; username: string; display_name: string }
       | undefined;
     return row

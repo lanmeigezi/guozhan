@@ -94,6 +94,20 @@ export interface AttachedWs {
 
 export function attachWebSocket(server: HttpServer, deps: WsDeps): AttachedWs {
   const wss = new WebSocketServer({ noServer: true });
+  /** 每个连接绑定的席位；撤销令牌时据此立即断开，杜绝"踢人后 WS 还在收事件" */
+  const sessionSeats = new Map<WebSocket, { roomId: string; seatId: SeatId }>();
+  const unsubscribeInvalidation = deps.roomManager.onSeatInvalidated((roomId, seatId) => {
+    for (const [ws, bound] of sessionSeats) {
+      if (bound.roomId !== roomId) continue;
+      if (seatId !== null && bound.seatId !== seatId) continue;
+      try {
+        ws.close(4001, 'seat_revoked');
+      } catch {
+        ws.terminate();
+      }
+      sessionSeats.delete(ws);
+    }
+  });
 
   server.on('upgrade', (req: IncomingMessage, socket, head: Buffer) => {
     authorizeUpgrade(deps, req)
@@ -134,6 +148,7 @@ export function attachWebSocket(server: HttpServer, deps: WsDeps): AttachedWs {
     };
 
     const unsubscribe = deps.roomManager.subscribe(roomId, recipient, from, sink);
+    sessionSeats.set(ws, { roomId, seatId: principal.seatId });
 
     // 欢迎帧：告知订阅身份与补发起点（客户端据此校对 offset）
     void deps.roomManager
@@ -191,6 +206,7 @@ export function attachWebSocket(server: HttpServer, deps: WsDeps): AttachedWs {
     const cleanup = (): void => {
       clearInterval(heartbeat);
       unsubscribe();
+      sessionSeats.delete(ws);
     };
     ws.on('close', cleanup);
     ws.on('error', cleanup);
@@ -205,7 +221,9 @@ export function attachWebSocket(server: HttpServer, deps: WsDeps): AttachedWs {
     wss,
     close(): Promise<void> {
       return new Promise((resolve) => {
+        unsubscribeInvalidation();
         for (const client of wss.clients) client.terminate();
+        sessionSeats.clear();
         wss.close(() => resolve());
       });
     },

@@ -281,9 +281,13 @@ class FakeRoomManager implements RoomManager {
     });
   }
 
-  async getTurnReport(roomId: string, turn: number): Promise<TurnReport | null> {
+  async getTurnReport(roomId: string, turn: number, _recipient: SeatId | 'spectator'): Promise<TurnReport | null> {
     if (!this.rooms.has(roomId)) return null;
     return turn === 1 ? makeTurnReport(roomId, turn) : null;
+  }
+
+  onSeatInvalidated(_listener: (roomId: string, seatId: SeatId | null) => void): Unsubscribe {
+    return () => undefined;
   }
 
   async getState(_roomId: string): Promise<{ state: GameState; world: WorldConfig; scenario: ScenarioMeta } | null> {

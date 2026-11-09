@@ -196,7 +196,12 @@ export interface RoomManager {
    * 不含归属与兵力，不进 LLM 提示词，也不参与 CAS/结算。
    */
   getMapLayout(roomId: string): Promise<MapLayout>;
-  getTurnReport(roomId: string, turn: number): Promise<TurnReport | null>;
+  /**
+   * ★按接收者投影后的战报。recipient 为 'spectator'（管理令牌 / 观战席位）时是全知版本；
+   *   玩家席位只拿自己的命令、叙事、拒绝、势力基线与受众允许的事件。
+   *   **recipient 必传、无默认值** —— 不给"忘了传就返回全量"的逃逸口。
+   */
+  getTurnReport(roomId: string, turn: number, recipient: SeatId | 'spectator'): Promise<TurnReport | null>;
   /**
    * 完整对局记忆（逐回合战报 + 原始事件流 + 外交文书）。
    * recipient 为 'spectator' 时返回全知版本；玩家席位只返回该席位可见内容。
@@ -238,6 +243,13 @@ export interface RoomManager {
    */
   subscribe(roomId: string, recipient: SeatId | 'spectator', fromOffset: number, sink: (batch: EventBatch) => void): Unsubscribe;
   nextOffset(roomId: string): Promise<number>;
+
+  /**
+   * 席位失效广播。revokeSeat / reclaimSeat / joinRoom 顶替旧控制者 / deleteRoom 时触发。
+   * seatId=null 表示整间房所有席位失效。MCP/WS 长连接必须订阅并立即关闭对应会话，
+   * 否则"踢人后旧会话继续读写"会绕过撤销语义。
+   */
+  onSeatInvalidated(listener: (roomId: string, seatId: SeatId | null) => void): Unsubscribe;
 
   shutdown(): Promise<void>;
 }
