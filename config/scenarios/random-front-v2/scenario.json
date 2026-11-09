@@ -1,0 +1,98 @@
+{
+  "$comment": "随机地图 · 民心/基建篇。与 random-front 共用 generator.namespace，因此同一种子仍是同一张地图；差别是启用了 governance（全国民心、地区动乱、地区基建）。旧 random-front 保留，旧存档照常可读。",
+  "meta": {
+    "id": "random-front-v2",
+    "name": "隨機六角戰場 · 民心篇",
+    "description": "同一张种子地图，新增全国民心、地区动乱与地区基建。低民心会放大征兵与战火造成的地区动乱；基建能压低本区动乱、提高本区人口增长，并汇总为全国民心。",
+    "startTurn": 1,
+    "maxTurns": 30
+  },
+  "generator": {
+    "type": "hexboard",
+    "version": 1,
+    "radius": 3,
+    "factions": 4,
+    "namespace": "random-front"
+  },
+  "engine": {
+    "moduleOrder": [
+      "economy",
+      "statecraft",
+      "movement",
+      "formation",
+      "combat",
+      "governance"
+    ],
+    "behaviorFingerprint": 1
+  },
+  "timeout": {
+    "human": 300,
+    "ai": 120
+  },
+  "seats": {
+    "humanCapable": [
+      "north",
+      "east",
+      "west",
+      "south"
+    ],
+    "majorAi": [
+      "north",
+      "east"
+    ],
+    "minorAi": [
+      "west",
+      "south"
+    ],
+    "spectatorSlots": 2
+  },
+  "milestones": [
+    {
+      "turn": 6,
+      "require": {
+        "offensiveArmies": 2
+      },
+      "message": "第 6 回合前必须编成至少 2 支可进攻的野战军"
+    },
+    {
+      "turn": 12,
+      "require": {
+        "attacksLaunched": 1
+      },
+      "message": "第 12 回合前必须发起至少 1 次进攻"
+    },
+    {
+      "turn": 20,
+      "require": {
+        "regionsCaptured": 1
+      },
+      "message": "第 20 回合前必须夺取至少 1 个敌方区域"
+    }
+  ],
+  "llm": {
+    "model": "deepseek-chat",
+    "advisorMaxTokens": 2048,
+    "narrativeMaxTokens": 1024,
+    "intentMaxTokens": 512,
+    "temperature": 0.7,
+    "language": "zh"
+  },
+  "budget": {
+    "perSeatTokenCap": 200000,
+    "perTurnCallCap": 8,
+    "onExceed": "degrade_to_deterministic"
+  },
+  "knowledge": {
+    "factionsFile": "factions.json",
+    "unitsFile": "units.json",
+    "combatFile": "../../rules/combat.json",
+    "economyFile": "../../rules/economy.json",
+    "movementFile": "../../rules/movement.json",
+    "lawsFile": "../../rules/laws.json",
+    "alertsFile": "../../rules/alerts.json",
+    "governanceFile": "../../rules/governance.json"
+  },
+  "victory": {
+    "conquestRegionsRatio": 0.6
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "seed": "stellar-12-2026",
+  "note": "同一 seed + 同一命令序列在任何设备上逐位一致。改 seed 即换一张星球。",
+  "regionCount": 48,
+  "nameStyles": ["中原", "江南", "北境", "西域", "南洋", "雪原", "海岛", "高原", "大漠", "雨林", "星港", "机械"],
+  "nameParts": ["陵", "川", "原", "泽", "岚", "朔", "沧", "垣", "津", "岳", "汀", "野", "疆", "浦", "岭", "洲"],
+  "terrains": [
+    { "id": "plain",   "name": "平原", "weight": 30, "food": 3, "ore": 1, "energy": 0 },
+    { "id": "hill",    "name": "丘陵", "weight": 20, "food": 2, "ore": 2, "energy": 0 },
+    { "id": "coast",   "name": "海岸", "weight": 16, "food": 2, "ore": 1, "energy": 1 },
+    { "id": "mountain","name": "山地", "weight": 12, "food": 1, "ore": 3, "energy": 0 },
+    { "id": "desert",  "name": "大漠", "weight": 10, "food": 0, "ore": 1, "energy": 3 },
+    { "id": "tundra",  "name": "冻土", "weight": 6,  "food": 0, "ore": 2, "energy": 2 },
+    { "id": "forest",  "name": "雨林", "weight": 6,  "food": 2, "ore": 0, "energy": 1 }
+  ],
+  "start": {
+    "food": 30, "ore": 24, "energy": 8, "knowledge": 10,
+    "population": 12, "development": 1, "stability": 70, "military": 10, "tech": 0, "colonies": 0
+  }
+}

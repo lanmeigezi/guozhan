@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.UnoBT" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#12131a</item>
+        <item name="android:colorPrimary">#7c9cff</item>
+        <item name="android:colorAccent">#7c9cff</item>
+        <item name="android:navigationBarColor">#12131a</item>
+        <item name="android:statusBarColor">#12131a</item>
+    </style>
+</resources>

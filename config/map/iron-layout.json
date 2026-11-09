@@ -1,0 +1,143 @@
+{
+  "$comment": "连续六角棋盘：pointy-top odd-r；5 排（0,1 北岸陆地；2 水域；3,4 南岸陆地），每排 6 格。x/y 由装载器按 hexSize 与 grid 计算；水域格由 waterRows 生成，陆地格与水域格共享视觉网格。bridges 由服务端从\"跨水域的普通邻接\"自动派生。",
+  "kind": "hexboard",
+  "canvas": {
+    "width": 1000,
+    "height": 640
+  },
+  "hexSize": 62,
+  "grid": {
+    "originX": 140,
+    "originY": 100,
+    "cols": 6,
+    "rows": 5,
+    "waterRows": [
+      2
+    ]
+  },
+  "river": {
+    "label": "大江"
+  },
+  "regions": [
+    {
+      "id": "a1",
+      "col": 0,
+      "row": 0
+    },
+    {
+      "id": "a2",
+      "col": 1,
+      "row": 0
+    },
+    {
+      "id": "a3",
+      "col": 2,
+      "row": 0
+    },
+    {
+      "id": "a4",
+      "col": 3,
+      "row": 0
+    },
+    {
+      "id": "a5",
+      "col": 4,
+      "row": 0
+    },
+    {
+      "id": "a6",
+      "col": 5,
+      "row": 0
+    },
+    {
+      "id": "b1",
+      "col": 0,
+      "row": 1
+    },
+    {
+      "id": "b2",
+      "col": 1,
+      "row": 1
+    },
+    {
+      "id": "b3",
+      "col": 2,
+      "row": 1
+    },
+    {
+      "id": "b4",
+      "col": 3,
+      "row": 1
+    },
+    {
+      "id": "b5",
+      "col": 4,
+      "row": 1
+    },
+    {
+      "id": "b6",
+      "col": 5,
+      "row": 1
+    },
+    {
+      "id": "c1",
+      "col": 0,
+      "row": 3
+    },
+    {
+      "id": "c2",
+      "col": 1,
+      "row": 3
+    },
+    {
+      "id": "c3",
+      "col": 2,
+      "row": 3
+    },
+    {
+      "id": "c4",
+      "col": 3,
+      "row": 3
+    },
+    {
+      "id": "c5",
+      "col": 4,
+      "row": 3
+    },
+    {
+      "id": "c6",
+      "col": 5,
+      "row": 3
+    },
+    {
+      "id": "d1",
+      "col": 0,
+      "row": 4
+    },
+    {
+      "id": "d2",
+      "col": 1,
+      "row": 4
+    },
+    {
+      "id": "d3",
+      "col": 2,
+      "row": 4
+    },
+    {
+      "id": "d4",
+      "col": 3,
+      "row": 4
+    },
+    {
+      "id": "d5",
+      "col": 4,
+      "row": 4
+    },
+    {
+      "id": "d6",
+      "col": 5,
+      "row": 4
+    }
+  ]
+}

@@ -1,0 +1,441 @@
+{
+  "$comment": "鐵河棋局：连续六角棋盘（24 陆格 + 6 水格）。规则邻接在南北两岸内按六角邻居生成；跨水域只有 b2-c2、b5-c5 两座桥是普通邻接。waterRoutes 是无向特殊边，只有水师/两栖可走，端点必须是港口。",
+  "regions": [
+    {
+      "id": "a1",
+      "name": "朔北",
+      "terrain": "hills",
+      "adjacency": [
+        "a2",
+        "b1"
+      ],
+      "baseFood": 500,
+      "baseGold": 350,
+      "baseManpower": 40000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "a2",
+      "name": "雲中",
+      "terrain": "plains",
+      "adjacency": [
+        "a1",
+        "a3",
+        "b1",
+        "b2"
+      ],
+      "baseFood": 700,
+      "baseGold": 600,
+      "baseManpower": 60000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "a3",
+      "name": "雁門",
+      "terrain": "forest",
+      "adjacency": [
+        "a2",
+        "a4",
+        "b2",
+        "b3"
+      ],
+      "baseFood": 550,
+      "baseGold": 400,
+      "baseManpower": 45000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "a4",
+      "name": "幽州",
+      "terrain": "plains",
+      "adjacency": [
+        "a3",
+        "a5",
+        "b3",
+        "b4"
+      ],
+      "baseFood": 700,
+      "baseGold": 600,
+      "baseManpower": 60000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "a5",
+      "name": "白狼",
+      "terrain": "hills",
+      "adjacency": [
+        "a4",
+        "a6",
+        "b4",
+        "b5"
+      ],
+      "baseFood": 500,
+      "baseGold": 350,
+      "baseManpower": 40000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "a6",
+      "name": "玄塞",
+      "terrain": "mountain",
+      "adjacency": [
+        "a5",
+        "b5",
+        "b6"
+      ],
+      "baseFood": 300,
+      "baseGold": 200,
+      "baseManpower": 25000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "b1",
+      "name": "河朔",
+      "terrain": "river",
+      "adjacency": [
+        "a1",
+        "a2",
+        "b2"
+      ],
+      "baseFood": 650,
+      "baseGold": 550,
+      "baseManpower": 50000,
+      "strategic": true,
+      "passable": true,
+      "port": true
+    },
+    {
+      "id": "b2",
+      "name": "渡口",
+      "terrain": "plains",
+      "adjacency": [
+        "a2",
+        "a3",
+        "b1",
+        "b3",
+        "c2"
+      ],
+      "baseFood": 700,
+      "baseGold": 600,
+      "baseManpower": 60000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "b3",
+      "name": "中津",
+      "terrain": "river",
+      "adjacency": [
+        "a3",
+        "a4",
+        "b2",
+        "b4"
+      ],
+      "baseFood": 650,
+      "baseGold": 550,
+      "baseManpower": 50000,
+      "strategic": true,
+      "passable": true,
+      "port": true
+    },
+    {
+      "id": "b4",
+      "name": "中洲",
+      "terrain": "river",
+      "adjacency": [
+        "a4",
+        "a5",
+        "b3",
+        "b5"
+      ],
+      "baseFood": 650,
+      "baseGold": 550,
+      "baseManpower": 50000,
+      "strategic": true,
+      "passable": true,
+      "port": true
+    },
+    {
+      "id": "b5",
+      "name": "臨江",
+      "terrain": "river",
+      "adjacency": [
+        "a5",
+        "a6",
+        "b4",
+        "b6",
+        "c5"
+      ],
+      "baseFood": 650,
+      "baseGold": 550,
+      "baseManpower": 50000,
+      "strategic": true,
+      "passable": true,
+      "port": true
+    },
+    {
+      "id": "b6",
+      "name": "東萊",
+      "terrain": "forest",
+      "adjacency": [
+        "a6",
+        "b5"
+      ],
+      "baseFood": 550,
+      "baseGold": 400,
+      "baseManpower": 45000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "c1",
+      "name": "江左",
+      "terrain": "river",
+      "adjacency": [
+        "c2",
+        "d1",
+        "d2"
+      ],
+      "baseFood": 650,
+      "baseGold": 550,
+      "baseManpower": 50000,
+      "strategic": true,
+      "passable": true,
+      "port": true
+    },
+    {
+      "id": "c2",
+      "name": "南渡",
+      "terrain": "plains",
+      "adjacency": [
+        "b2",
+        "c1",
+        "c3",
+        "d2",
+        "d3"
+      ],
+      "baseFood": 700,
+      "baseGold": 600,
+      "baseManpower": 60000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "c3",
+      "name": "湖口",
+      "terrain": "river",
+      "adjacency": [
+        "c2",
+        "c4",
+        "d3",
+        "d4"
+      ],
+      "baseFood": 650,
+      "baseGold": 550,
+      "baseManpower": 50000,
+      "strategic": true,
+      "passable": true,
+      "port": true
+    },
+    {
+      "id": "c4",
+      "name": "潯陽",
+      "terrain": "river",
+      "adjacency": [
+        "c3",
+        "c5",
+        "d4",
+        "d5"
+      ],
+      "baseFood": 650,
+      "baseGold": 550,
+      "baseManpower": 50000,
+      "strategic": true,
+      "passable": true,
+      "port": true
+    },
+    {
+      "id": "c5",
+      "name": "石橋",
+      "terrain": "plains",
+      "adjacency": [
+        "b5",
+        "c4",
+        "c6",
+        "d5",
+        "d6"
+      ],
+      "baseFood": 700,
+      "baseGold": 600,
+      "baseManpower": 60000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "c6",
+      "name": "海鹽",
+      "terrain": "river",
+      "adjacency": [
+        "c5",
+        "d6"
+      ],
+      "baseFood": 650,
+      "baseGold": 550,
+      "baseManpower": 50000,
+      "strategic": true,
+      "passable": true,
+      "port": true
+    },
+    {
+      "id": "d1",
+      "name": "武陵",
+      "terrain": "hills",
+      "adjacency": [
+        "c1",
+        "d2"
+      ],
+      "baseFood": 500,
+      "baseGold": 350,
+      "baseManpower": 40000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "d2",
+      "name": "長沙",
+      "terrain": "plains",
+      "adjacency": [
+        "c1",
+        "c2",
+        "d1",
+        "d3"
+      ],
+      "baseFood": 700,
+      "baseGold": 600,
+      "baseManpower": 60000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "d3",
+      "name": "豫章",
+      "terrain": "forest",
+      "adjacency": [
+        "c2",
+        "c3",
+        "d2",
+        "d4"
+      ],
+      "baseFood": 550,
+      "baseGold": 400,
+      "baseManpower": 45000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "d4",
+      "name": "吳會",
+      "terrain": "plains",
+      "adjacency": [
+        "c3",
+        "c4",
+        "d3",
+        "d5"
+      ],
+      "baseFood": 700,
+      "baseGold": 600,
+      "baseManpower": 60000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "d5",
+      "name": "建安",
+      "terrain": "urban",
+      "adjacency": [
+        "c4",
+        "c5",
+        "d4",
+        "d6"
+      ],
+      "baseFood": 900,
+      "baseGold": 900,
+      "baseManpower": 70000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "d6",
+      "name": "南海",
+      "terrain": "hills",
+      "adjacency": [
+        "c5",
+        "c6",
+        "d5"
+      ],
+      "baseFood": 500,
+      "baseGold": 350,
+      "baseManpower": 40000,
+      "strategic": false,
+      "passable": true
+    }
+  ],
+  "waterRoutes": [
+    {
+      "a": "b1",
+      "b": "b3",
+      "cost": 1
+    },
+    {
+      "a": "b1",
+      "b": "c1",
+      "cost": 1
+    },
+    {
+      "a": "b3",
+      "b": "b4",
+      "cost": 1
+    },
+    {
+      "a": "b3",
+      "b": "c3",
+      "cost": 1
+    },
+    {
+      "a": "b4",
+      "b": "b5",
+      "cost": 1
+    },
+    {
+      "a": "b4",
+      "b": "c4",
+      "cost": 1
+    },
+    {
+      "a": "b5",
+      "b": "c4",
+      "cost": 1
+    },
+    {
+      "a": "c1",
+      "b": "c3",
+      "cost": 1
+    },
+    {
+      "a": "c3",
+      "b": "c4",
+      "cost": 1
+    },
+    {
+      "a": "c4",
+      "b": "c6",
+      "cost": 1
+    }
+  ]
+}

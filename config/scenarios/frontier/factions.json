@@ -1,0 +1,255 @@
+{
+  "$comment": "开荒模式示例：4 个自定义国家各占 1 格；其余地块为原住民荒地。改 name/territories/颜色即可自定义国家与地名。",
+  "factions": [
+    {
+      "id": "red",
+      "name": "赤原裔",
+      "ruler": "赤原君",
+      "color": "#c95b4d",
+      "capital": "guanzhong",
+      "territories": [
+        "guanzhong"
+      ],
+      "gold": 1300,
+      "food": 3200,
+      "morale": 72,
+      "taxRate": 0.2,
+      "laws": [],
+      "personality": {
+        "aggression": 0.65,
+        "diplomacy": "expansionist",
+        "description": "逐水草而居的赤原部，善用长矛与民兵。"
+      },
+      "units": [
+        {
+          "id": "u_red_1",
+          "region": "guanzhong",
+          "type": "spearman",
+          "troops": 15000
+        },
+        {
+          "id": "u_red_2",
+          "region": "guanzhong",
+          "type": "militia",
+          "troops": 8000
+        }
+      ]
+    },
+    {
+      "id": "blue",
+      "name": "蒼河裔",
+      "ruler": "蒼河君",
+      "color": "#4d78c9",
+      "capital": "jinyang",
+      "territories": [
+        "jinyang"
+      ],
+      "gold": 1200,
+      "food": 3000,
+      "morale": 70,
+      "taxRate": 0.2,
+      "laws": [],
+      "personality": {
+        "aggression": 0.6,
+        "diplomacy": "pragmatic",
+        "description": "沿河而行的蒼河部，骑手与农人并重。"
+      },
+      "units": [
+        {
+          "id": "u_blue_1",
+          "region": "jinyang",
+          "type": "cavalry",
+          "troops": 12000
+        },
+        {
+          "id": "u_blue_2",
+          "region": "jinyang",
+          "type": "militia",
+          "troops": 9000
+        }
+      ]
+    },
+    {
+      "id": "green",
+      "name": "青林裔",
+      "ruler": "青林君",
+      "color": "#4f9a68",
+      "capital": "xinzheng",
+      "territories": [
+        "xinzheng"
+      ],
+      "gold": 1250,
+      "food": 3300,
+      "morale": 74,
+      "taxRate": 0.2,
+      "laws": [],
+      "personality": {
+        "aggression": 0.45,
+        "diplomacy": "defensive",
+        "description": "隐于林间的青林部，擅长弓弩与筑寨。"
+      },
+      "units": [
+        {
+          "id": "u_green_1",
+          "region": "xinzheng",
+          "type": "swordsman",
+          "troops": 13000
+        },
+        {
+          "id": "u_green_2",
+          "region": "xinzheng",
+          "type": "archer",
+          "troops": 8000
+        }
+      ]
+    },
+    {
+      "id": "gold",
+      "name": "金丘裔",
+      "ruler": "金丘君",
+      "color": "#c9a84f",
+      "capital": "ying",
+      "territories": [
+        "ying"
+      ],
+      "gold": 1500,
+      "food": 2800,
+      "morale": 69,
+      "taxRate": 0.22,
+      "laws": [],
+      "personality": {
+        "aggression": 0.5,
+        "diplomacy": "mercantile",
+        "description": "据守南方丘陵的金丘部，以粮换兵，稳扎稳打。"
+      },
+      "units": [
+        {
+          "id": "u_gold_1",
+          "region": "ying",
+          "type": "spearman",
+          "troops": 12000
+        },
+        {
+          "id": "u_gold_2",
+          "region": "ying",
+          "type": "archer",
+          "troops": 10000
+        }
+      ]
+    }
+  ],
+  "neutralTerritories": [
+    {
+      "id": "longxi",
+      "garrison": {
+        "type": "militia",
+        "troops": 400
+      }
+    },
+    {
+      "id": "bashu",
+      "garrison": {
+        "type": "militia",
+        "troops": 500
+      }
+    },
+    {
+      "id": "hanzhong",
+      "garrison": {
+        "type": "militia",
+        "troops": 375
+      }
+    },
+    {
+      "id": "handan",
+      "garrison": {
+        "type": "militia",
+        "troops": 575
+      }
+    },
+    {
+      "id": "dai",
+      "garrison": {
+        "type": "militia",
+        "troops": 350
+      }
+    },
+    {
+      "id": "daliang",
+      "garrison": {
+        "type": "militia",
+        "troops": 650
+      }
+    },
+    {
+      "id": "hedong",
+      "garrison": {
+        "type": "militia",
+        "troops": 475
+      }
+    },
+    {
+      "id": "shangdang",
+      "garrison": {
+        "type": "militia",
+        "troops": 375
+      }
+    },
+    {
+      "id": "luoyang",
+      "garrison": {
+        "type": "militia",
+        "troops": 700
+      }
+    },
+    {
+      "id": "linzi",
+      "garrison": {
+        "type": "militia",
+        "troops": 725
+      }
+    },
+    {
+      "id": "langya",
+      "garrison": {
+        "type": "militia",
+        "troops": 475
+      }
+    },
+    {
+      "id": "nanyang",
+      "garrison": {
+        "type": "militia",
+        "troops": 500
+      }
+    },
+    {
+      "id": "jiangdong",
+      "garrison": {
+        "type": "militia",
+        "troops": 525
+      }
+    },
+    {
+      "id": "ji",
+      "garrison": {
+        "type": "militia",
+        "troops": 425
+      }
+    },
+    {
+      "id": "liaodong",
+      "garrison": {
+        "type": "militia",
+        "troops": 340
+      }
+    }
+  ],
+  "initialRelations": [
+    {
+      "a": "red",
+      "b": "blue",
+      "kind": "war"
+    }
+  ]
+}

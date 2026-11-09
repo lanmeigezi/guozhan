@@ -1,0 +1,74 @@
+{
+  "$comment": "開荒 · 自訂地圖：一片未開墾的荒原，4 個自訂國家各占 1 格。地圖/地名/國家名在 regions.json、layout.json、factions.json 中修改。",
+  "meta": {
+    "id": "frontier",
+    "name": "開荒 · 自訂地圖",
+    "description": "一片未開墾的荒原：每方只占 1 格，必須派兵進入空白地塊並完成基建 Lv1 才能占領。每塊荒地自帶原住民和少量資金，會轉化為兵源與開墾資金。",
+    "startTurn": 1,
+    "maxTurns": 60
+  },
+  "engine": {
+    "moduleOrder": [
+      "economy",
+      "statecraft",
+      "movement",
+      "formation",
+      "combat",
+      "frontier",
+      "governance"
+    ],
+    "behaviorFingerprint": 2
+  },
+  "timeout": {
+    "human": 300,
+    "ai": 120
+  },
+  "seats": {
+    "humanCapable": [
+      "red",
+      "blue",
+      "green",
+      "gold"
+    ],
+    "majorAi": [
+      "red"
+    ],
+    "minorAi": [
+      "blue",
+      "green",
+      "gold"
+    ],
+    "spectatorSlots": 2
+  },
+  "milestones": [],
+  "llm": {
+    "model": "deepseek-chat",
+    "advisorMaxTokens": 2048,
+    "narrativeMaxTokens": 1024,
+    "intentMaxTokens": 512,
+    "temperature": 0.7,
+    "language": "zh"
+  },
+  "budget": {
+    "perSeatTokenCap": 200000,
+    "perTurnCallCap": 8,
+    "onExceed": "degrade_to_deterministic"
+  },
+  "knowledge": {
+    "mapFile": "regions.json",
+    "layoutFile": "layout.json",
+    "factionsFile": "factions.json",
+    "unitsFile": "../../rules/units.json",
+    "combatFile": "../../rules/combat.json",
+    "economyFile": "../../rules/economy.json",
+    "movementFile": "../../rules/movement.json",
+    "lawsFile": "../../rules/laws.json",
+    "alertsFile": "../../rules/alerts.json",
+    "governanceFile": "../../rules/governance.json",
+    "frontierFile": "frontier.json"
+  },
+  "victory": {
+    "conquestRegionsRatio": 0.6
+  },
+  "$comment_modules": "开荒也开放外交/谍报（initialRelations 里的红蓝交战需要 statecraft 才有意义）；平民产出惩罚已按业主决定关闭（frontier.json civilianLaborPenalty=0）。"
+}

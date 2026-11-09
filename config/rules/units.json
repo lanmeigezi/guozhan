@@ -1,0 +1,81 @@
+{
+  "$comment": "兵种定义。★counters 是克制表：对被克制兵种的有效战力 ×(1+bonus)。所有数值参与确定性战斗结算，LLM 不得修改。",
+  "unitTypes": [
+    {
+      "id": "militia",
+      "name": "民兵",
+      "attack": 3,
+      "defense": 4,
+      "movement": 2,
+      "recruitGold": 20,
+      "recruitFood": 30,
+      "recruitManpower": 100,
+      "upkeepGold": 1,
+      "upkeepFood": 2
+    },
+    {
+      "id": "spearman",
+      "name": "槍兵",
+      "attack": 5,
+      "defense": 8,
+      "movement": 2,
+      "recruitGold": 45,
+      "recruitFood": 50,
+      "recruitManpower": 100,
+      "upkeepGold": 2,
+      "upkeepFood": 3,
+      "counters": { "cavalry": 0.5 }
+    },
+    {
+      "id": "swordsman",
+      "name": "劍士",
+      "attack": 8,
+      "defense": 6,
+      "movement": 2,
+      "recruitGold": 70,
+      "recruitFood": 60,
+      "recruitManpower": 100,
+      "upkeepGold": 3,
+      "upkeepFood": 4
+    },
+    {
+      "id": "archer",
+      "name": "弓兵",
+      "attack": 7,
+      "defense": 3,
+      "movement": 2,
+      "recruitGold": 60,
+      "recruitFood": 45,
+      "recruitManpower": 100,
+      "upkeepGold": 3,
+      "upkeepFood": 3,
+      "counters": { "spearman": 0.3 }
+    },
+    {
+      "id": "cavalry",
+      "name": "騎兵",
+      "attack": 10,
+      "defense": 4,
+      "movement": 4,
+      "recruitGold": 120,
+      "recruitFood": 100,
+      "recruitManpower": 100,
+      "upkeepGold": 6,
+      "upkeepFood": 8,
+      "counters": { "archer": 0.5, "siege": 0.6 }
+    },
+    {
+      "id": "siege",
+      "name": "攻城器械",
+      "attack": 14,
+      "defense": 2,
+      "movement": 1,
+      "recruitGold": 200,
+      "recruitFood": 80,
+      "recruitManpower": 150,
+      "upkeepGold": 8,
+      "upkeepFood": 6,
+      "$comment": "fortBonus 对攻城器械减半，见 combat.json 的 siegeNegatesFort"
+    }
+  ]
+}

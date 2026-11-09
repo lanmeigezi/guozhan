@@ -1,0 +1,137 @@
+{
+  "$comment": "艾利亚大陆六强初始状态（架空世界）。★territories 必须与 map/regions.json 的 id 对得上，且除 luoyang(星冠圣所，中立) 外每个区域恰好属于一个势力 —— 由 config.test.ts 强制。地图沿用战国那张 19 区域图：地名是星冠帝国时代传下的古地名，六强只是换了主人 —— 这正是'换世界观不换地图'的解耦证明。",
+  "factions": [
+    {
+      "id": "emberfall",
+      "name": "燼落王朝",
+      "ruler": "焰后·索拉娜",
+      "color": "#b3401e",
+      "capital": "guanzhong",
+      "territories": ["guanzhong", "hanzhong", "longxi"],
+      "gold": 2600,
+      "food": 6500,
+      "morale": 78,
+      "taxRate": 0.32,
+      "laws": ["yantie", "jingbing"],
+      "personality": { "aggression": 0.85, "diplomacy": "calculating", "description": "西方鍛爐之国：焰术工匠与熔铁军团立国，笃信'星冠既碎，天命在燼'，志在重铸帝国" },
+      "units": [
+        { "id": "u_ember_1", "region": "guanzhong", "type": "spearman", "troops": 18000 },
+        { "id": "u_ember_2", "region": "guanzhong", "type": "siege", "troops": 4000 },
+        { "id": "u_ember_3", "region": "hanzhong", "type": "swordsman", "troops": 12000 },
+        { "id": "u_ember_4", "region": "longxi", "type": "militia", "troops": 9000 }
+      ]
+    },
+    {
+      "id": "drakmoor",
+      "name": "龍崖公國",
+      "ruler": "龙崖公·瓦德蒙",
+      "color": "#5b2a86",
+      "capital": "jinyang",
+      "territories": ["jinyang", "hedong", "shangdang"],
+      "gold": 2400,
+      "food": 5200,
+      "morale": 74,
+      "taxRate": 0.3,
+      "laws": ["junxian", "jingbing"],
+      "personality": { "aggression": 0.7, "diplomacy": "honorable", "description": "崇龙尚武的山地公国：龙崖骑士团名震大陆，视燼落的'天命'为僭越，两国已在河东边界交火数年" },
+      "units": [
+        { "id": "u_drak_1", "region": "jinyang", "type": "spearman", "troops": 20000 },
+        { "id": "u_drak_2", "region": "jinyang", "type": "cavalry", "troops": 9000 },
+        { "id": "u_drak_3", "region": "hedong", "type": "swordsman", "troops": 13000 },
+        { "id": "u_drak_4", "region": "shangdang", "type": "archer", "troops": 10000 }
+      ]
+    },
+    {
+      "id": "valkyr",
+      "name": "荒嘯部族",
+      "ruler": "大汗·赫尔加",
+      "color": "#7a8b99",
+      "capital": "ji",
+      "territories": ["ji", "dai", "liaodong"],
+      "gold": 1400,
+      "food": 4000,
+      "morale": 82,
+      "taxRate": 0.18,
+      "laws": ["fuyi"],
+      "personality": { "aggression": 0.8, "diplomacy": "raiding", "description": "北荒兽骑游牧联盟：不事稼穑、以战养战，霜狼骑兵一夜可越两郡，谁弱就打谁" },
+      "units": [
+        { "id": "u_valk_1", "region": "ji", "type": "cavalry", "troops": 14000 },
+        { "id": "u_valk_2", "region": "ji", "type": "spearman", "troops": 10000 },
+        { "id": "u_valk_3", "region": "dai", "type": "militia", "troops": 7000 },
+        { "id": "u_valk_4", "region": "liaodong", "type": "militia", "troops": 6000 }
+      ]
+    },
+    {
+      "id": "aurelia",
+      "name": "金穗商盟",
+      "ruler": "执政总督·奥古斯汀",
+      "color": "#c9a227",
+      "capital": "linzi",
+      "territories": ["linzi", "langya", "handan"],
+      "gold": 4200,
+      "food": 4800,
+      "morale": 66,
+      "taxRate": 0.24,
+      "laws": ["yantie", "fuyi"],
+      "personality": { "aggression": 0.3, "diplomacy": "mercantile", "description": "东岸商业共和国：金币比刀剑锋利，雇佣兵明码标价，最恨战争打断航路，但绝不介意高价卖军火给交战国" },
+      "units": [
+        { "id": "u_aure_1", "region": "linzi", "type": "swordsman", "troops": 16000 },
+        { "id": "u_aure_2", "region": "linzi", "type": "archer", "troops": 12000 },
+        { "id": "u_aure_3", "region": "handan", "type": "spearman", "troops": 14000 },
+        { "id": "u_aure_4", "region": "langya", "type": "militia", "troops": 8000 }
+      ]
+    },
+    {
+      "id": "thornwall",
+      "name": "荊墻領",
+      "ruler": "领主·艾琳",
+      "color": "#3e6b35",
+      "capital": "daliang",
+      "territories": ["daliang", "xinzheng", "nanyang"],
+      "gold": 2000,
+      "food": 6000,
+      "morale": 64,
+      "taxRate": 0.28,
+      "laws": ["juntian", "jianmin"],
+      "personality": { "aggression": 0.35, "diplomacy": "defensive", "description": "中枢平原的农垦領国：荆棘墙垣之内粮仓满溢，四战之地无险可恃，凭屯垦与工事在列强夹缝中求生" },
+      "units": [
+        { "id": "u_thor_1", "region": "daliang", "type": "spearman", "troops": 18000 },
+        { "id": "u_thor_2", "region": "daliang", "type": "archer", "troops": 10000 },
+        { "id": "u_thor_3", "region": "xinzheng", "type": "militia", "troops": 9000 },
+        { "id": "u_thor_4", "region": "nanyang", "type": "spearman", "troops": 12000 }
+      ]
+    },
+    {
+      "id": "verdantholm",
+      "name": "翠谷議庭",
+      "ruler": "大德鲁伊·橡木心",
+      "color": "#1f7a4d",
+      "capital": "ying",
+      "territories": ["ying", "bashu", "jiangdong"],
+      "gold": 1800,
+      "food": 7500,
+      "morale": 70,
+      "taxRate": 0.2,
+      "laws": ["jianmin"],
+      "personality": { "aggression": 0.4, "diplomacy": "neutral", "description": "南方密林的德鲁伊议事联邦：谷仓最满、战意最淡，主张'列强耗尽了，森林还在'，但树界守卫从不手软" },
+      "units": [
+        { "id": "u_verd_1", "region": "ying", "type": "swordsman", "troops": 14000 },
+        { "id": "u_verd_2", "region": "ying", "type": "archer", "troops": 12000 },
+        { "id": "u_verd_3", "region": "bashu", "type": "spearman", "troops": 13000 },
+        { "id": "u_verd_4", "region": "jiangdong", "type": "militia", "troops": 8000 }
+      ]
+    }
+  ],
+  "$comment_neutral": "luoyang(洛陽) 在本剧本中是旧帝国旧都'星冠圣所'：六强共誓不得先取，开局中立、留有圣所守卫，是各方争夺的第一个目标",
+  "neutralTerritories": [
+    { "id": "luoyang", "garrison": { "type": "spearman", "troops": 5000 } }
+  ],
+  "$comment_relations": "★emberfall-drakmoor 为 war，且两国领土接壤（guanzhong↔hedong），开局即存在真实进攻路径 —— 这是 OpenRA-RL '5 局零交锋'事故的对策，由 config.test.ts 的开局闸门强制。",
+  "initialRelations": [
+    { "a": "emberfall", "b": "drakmoor", "kind": "war", "sinceTurn": 0 },
+    { "a": "valkyr", "b": "drakmoor", "kind": "truce", "sinceTurn": 0 },
+    { "a": "aurelia", "b": "thornwall", "kind": "truce", "sinceTurn": 0 },
+    { "a": "verdantholm", "b": "thornwall", "kind": "peace", "sinceTurn": 0 },
+    { "a": "aurelia", "b": "verdantholm", "kind": "alliance", "sinceTurn": 0 }
+  ]
+}

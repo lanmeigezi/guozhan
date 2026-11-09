@@ -1,0 +1,187 @@
+{
+  "$comment": "超大陆剧本的十二势力花名册。territories/capital/units 由生成器按种子填充。",
+  "factions": [
+    {
+      "id": "north",
+      "name": "北庭",
+      "ruler": "北庭侯",
+      "color": "#4a6fa5",
+      "personality": {
+        "aggression": 0.75,
+        "diplomacy": "calculating",
+        "description": "北地骑射立国，善守河岸，伺机南渡。"
+      },
+      "laws": [
+        "junxian",
+        "juntian"
+      ],
+      "taxRate": 0.3
+    },
+    {
+      "id": "east",
+      "name": "東海",
+      "ruler": "东海公",
+      "color": "#c9a227",
+      "personality": {
+        "aggression": 0.55,
+        "diplomacy": "mercantile",
+        "description": "东岸商盟，港埠与盐铁并重，最重航路。"
+      },
+      "laws": [
+        "yantie"
+      ],
+      "taxRate": 0.28
+    },
+    {
+      "id": "west",
+      "name": "西川",
+      "ruler": "西川王",
+      "color": "#8b4a3b",
+      "personality": {
+        "aggression": 0.6,
+        "diplomacy": "defensive",
+        "description": "西岸山国，凭坚城与山地步卒自守。"
+      },
+      "laws": [
+        "junxian"
+      ],
+      "taxRate": 0.3
+    },
+    {
+      "id": "south",
+      "name": "南越",
+      "ruler": "南越王",
+      "color": "#3e7b5a",
+      "personality": {
+        "aggression": 0.8,
+        "diplomacy": "raiding",
+        "description": "水乡舟师之国，顺流而击，来去如风。"
+      },
+      "laws": [
+        "jingbing"
+      ],
+      "taxRate": 0.26
+    },
+    {
+      "id": "qin",
+      "name": "秦",
+      "ruler": "秦王",
+      "color": "#5b5f97",
+      "personality": {
+        "aggression": 0.8,
+        "diplomacy": "expansionist",
+        "description": "关中四塞，耕战立国，志在并吞。"
+      },
+      "laws": [
+        "juntian",
+        "junxian"
+      ],
+      "taxRate": 0.32
+    },
+    {
+      "id": "chu",
+      "name": "楚",
+      "ruler": "楚王",
+      "color": "#b35c6e",
+      "personality": {
+        "aggression": 0.7,
+        "diplomacy": "ambitious",
+        "description": "江汉沃野，带甲百万，欲问鼎中原。"
+      },
+      "laws": [
+        "fuyi"
+      ],
+      "taxRate": 0.28
+    },
+    {
+      "id": "qi",
+      "name": "齊",
+      "ruler": "齊王",
+      "color": "#2f7f7f",
+      "personality": {
+        "aggression": 0.55,
+        "diplomacy": "mercantile",
+        "description": "东海鱼盐之利，富甲天下。"
+      },
+      "laws": [
+        "yantie"
+      ],
+      "taxRate": 0.3
+    },
+    {
+      "id": "yan",
+      "name": "燕",
+      "ruler": "燕王",
+      "color": "#8a6d3b",
+      "personality": {
+        "aggression": 0.65,
+        "diplomacy": "cautious",
+        "description": "北疆苦寒，结盟自保，伺机东出。"
+      },
+      "laws": [
+        "jingbing"
+      ],
+      "taxRate": 0.3
+    },
+    {
+      "id": "zhao",
+      "name": "趙",
+      "ruler": "趙王",
+      "color": "#5a8f3c",
+      "personality": {
+        "aggression": 0.75,
+        "diplomacy": "martial",
+        "description": "胡服骑射，边骑冠绝诸国。"
+      },
+      "laws": [
+        "jingbing"
+      ],
+      "taxRate": 0.29
+    },
+    {
+      "id": "wei",
+      "name": "魏",
+      "ruler": "魏王",
+      "color": "#9a4f8f",
+      "personality": {
+        "aggression": 0.6,
+        "diplomacy": "central",
+        "description": "四战之地，重甲武卒，守中带攻。"
+      },
+      "laws": [
+        "junxian"
+      ],
+      "taxRate": 0.3
+    },
+    {
+      "id": "han",
+      "name": "韓",
+      "ruler": "韓王",
+      "color": "#4f6d8a",
+      "personality": {
+        "aggression": 0.5,
+        "diplomacy": "defensive",
+        "description": "天下咽喉，劲弩坚城，善守不善攻。"
+      },
+      "laws": [
+        "yantie"
+      ],
+      "taxRate": 0.27
+    },
+    {
+      "id": "wu",
+      "name": "吳",
+      "ruler": "吳王",
+      "color": "#a65d3a",
+      "personality": {
+        "aggression": 0.7,
+        "diplomacy": "naval",
+        "description": "三江五湖，舟师纵横，恃水而骄。"
+      },
+      "laws": [
+        "juntian"
+      ],
+      "taxRate": 0.28
+    }
+  ]
+}

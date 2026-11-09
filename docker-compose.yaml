@@ -1,0 +1,55 @@
+# ─────────────────────────────────────────────────────────────
+# guozhan —— compose 安全基线（★整段照抄架构文档 §7.2，源自 tavern-battle-mcp）
+#
+# 一键启动：cp .env.example .env && 填好必填项 && docker compose up -d
+# 公网访问：只允许通过 caddy 反代（guozhan 端口只绑 127.0.0.1 loopback）
+# ─────────────────────────────────────────────────────────────
+x-hardening: &hardening
+  init: true
+  read_only: true                       # 根文件系统只读
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+
+services:
+  guozhan:
+    build: .
+    restart: unless-stopped
+    <<: *hardening
+    ports: ["127.0.0.1:8788:8788"]        # ★只绑 loopback，公网必须过反代
+    volumes:
+      - ./data:/app/data                  # 唯一可写路径
+      - ./config:/app/config:ro
+    environment:
+      GUOZHAN_TOKEN: ${GUOZHAN_TOKEN:?必须设置，≥24 字符}
+      GUOZHAN_ORIGINS: ${GUOZHAN_ORIGINS:?必须设置 Origin 白名单}
+      LLM_API_BASE: ${LLM_API_BASE:-https://api.deepseek.com/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-}       # 留空 = 离线纯确定性模式，游戏仍可玩
+      LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
+      PORT: ${PORT:-8788}
+      GUOZHAN_DATA_DIR: ${GUOZHAN_DATA_DIR:-/app/data}
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+  board-games:
+    build: .
+    restart: unless-stopped
+    <<: *hardening
+    ports: ["127.0.0.1:8766:8766"]
+    command: ["node", "board-games/server/server.mjs", "8766", "${BOARD_GAMES_DEFAULT_GAME:-uno}"]
+    volumes:
+      - board_games_data:/app/data             # 积分榜可写目录（根文件系统只读）
+    environment:
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_API_BASE:-https://api.deepseek.com/v1}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
+      LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-30000}
+      BOARD_GAMES_DATA_DIR: ${BOARD_GAMES_DATA_DIR:-/app/data}
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+  caddy:                                  # 可选：自动 HTTPS
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes: [./deploy/Caddyfile:/etc/caddy/Caddyfile:ro, caddy_data:/data]
+volumes: { caddy_data: {}, board_games_data: {} }

@@ -1,0 +1,17 @@
+{
+  "name": "board-games",
+  "version": "2.6.3",
+  "private": true,
+  "description": "零依赖桌游房间服务（UNO / 斗地主 / 炸弹猫 / 骗子酒馆 / 国战 / 大富翁 / 狼人杀）+ 跨游戏积分榜，作为 guozhan 包的桌游合集入口",
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.mjs 8766 uno",
+    "test": "node core/test/run-all.mjs",
+    "verify:socket": "node server/verify-socket.mjs",
+    "build:web": "node scripts/build-web.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

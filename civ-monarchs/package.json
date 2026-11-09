@@ -1,0 +1,20 @@
+{
+  "name": "civ-monarchs",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "群星君主 · 文明推演 —— 12 个大模型扮演君主；零依赖 Node 后端四入口 + 离线单机 Android APK（桌游合集第 9 款）",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server/main.js",
+    "mcp": "node src/mcp/server.js",
+    "test": "node --test tests/*.test.js",
+    "verify": "node --test tests/*.test.js && node scripts/smoke.mjs",
+    "pack": "node scripts/pack.mjs"
+  },
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {}
+}

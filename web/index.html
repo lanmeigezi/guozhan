@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#0b0e12" />
+<title>桌游合集 · 国战六角棋</title>
+<link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+<section id="hall" class="hall">
+  <div class="hall-inner">
+    <header class="hall-head">
+      <div class="brand">
+        <div class="seal" aria-hidden="true">桌</div>
+        <div>
+          <h1>桌游合集</h1>
+          <p>登录 → 选桌游：国战在本页组局，其余 6 款走桌游服务</p>
+        </div>
+      </div>
+      <div class="hall-head-actions">
+        <button id="hallResume" class="btn ghost small" type="button" hidden>回到沙盘</button>
+      </div>
+    </header>
+
+    <section id="hallAccount" class="account-pane hall-account">
+      <div id="accountLoggedOut">
+        <p class="hint small">先登录：登录后才能建房 / 加入国战，或进入其余桌游服务。</p>
+        <div class="hall-login-grid">
+          <div>
+            <label for="accountUser">用户名</label>
+            <input id="accountUser" placeholder="2–24 位用户名" spellcheck="false" autocomplete="username" />
+          </div>
+          <div>
+            <label for="accountPass">密码</label>
+            <input id="accountPass" type="password" placeholder="至少 8 位" autocomplete="current-password" />
+          </div>
+          <div>
+            <label for="accountDisplay">昵称（注册可选）</label>
+            <input id="accountDisplay" placeholder="显示给其他玩家" autocomplete="nickname" />
+          </div>
+          <div class="connect-actions">
+            <button id="accountLogin" class="btn primary" type="button">登录</button>
+            <button id="accountRegister" class="btn ghost" type="button">注册</button>
+          </div>
+        </div>
+      </div>
+      <div id="accountLoggedIn" hidden>
+        <p class="self-sub" id="accountWho">—</p>
+        <div class="connect-actions">
+          <button id="accountLogout" class="btn ghost" type="button">退出账号</button>
+        </div>
+      </div>
+      <div id="accountStatus" class="connect-status">未登录。账号令牌只保存在本机浏览器。</div>
+    </section>
+
+    <section id="resumeCard" class="resume-card" hidden>
+      <div class="resume-card-head">
+        <h2>继续对局</h2>
+        <p>有没打完的对局；点「继续对局」回到原席位，原来的令牌会作废。</p>
+      </div>
+      <div id="resumeList" class="resume-list"></div>
+    </section>
+
+    <div id="gameGrid" class="game-grid" role="list"></div>
+
+    <div id="hallGuozhan" class="hall-panel">
+      <div class="hall-panel-head">
+        <h2>国战 · 六角棋</h2>
+        <p>选剧本 → 选势力建房，或从大厅加入别人的房间；进房后由房主发席位。</p>
+      </div>
+      <div class="account-grid">
+        <section class="account-pane">
+          <h3 class="account-h3">我的房间</h3>
+          <div class="connect-actions">
+            <button id="lobbyRefresh" class="btn ghost" type="button">刷新大厅</button>
+          </div>
+          <div id="myRooms" class="account-rooms"><div class="detail-empty">登录后显示我的房间。</div></div>
+        </section>
+
+        <section class="account-pane">
+          <h3 class="account-h3">房间大厅</h3>
+          <div id="lobbyList" class="account-rooms"><div class="detail-empty">登录后显示房间。</div></div>
+          <h3 class="account-h3">新建房间</h3>
+          <label>剧本</label>
+          <select id="lobbyScenario" hidden></select>
+          <div id="lobbyModes" class="mode-grid"></div>
+          <label for="lobbyFaction">我方势力</label>
+          <select id="lobbyFaction"></select>
+          <label for="lobbyName">房间名</label>
+          <input id="lobbyName" placeholder="留空则自动命名" />
+          <label class="quickstart-check"><input id="lobbyUnlimited" type="checkbox" checked /> 不限回合（∞）</label>
+          <div class="connect-actions">
+            <button id="lobbyCreate" class="btn primary" type="button">建房并加入</button>
+          </div>
+          <p class="hint small">房主可在成员列表里踢人/封禁；被封禁的账号不能重新加入该房间。</p>
+        </section>
+      </div>
+    </div>
+
+    <div id="hallOther" class="hall-panel" hidden>
+      <div class="hall-panel-head">
+        <h2 id="hallOtherName">—</h2>
+        <p>这款桌游跑在独立的桌游服务里（默认 8766 端口），本页只负责入口。</p>
+      </div>
+      <label for="hallServiceUrl">桌游服务地址</label>
+      <input id="hallServiceUrl" value="http://127.0.0.1:8766/" spellcheck="false" />
+      <div class="connect-actions">
+        <button id="hallServiceOpen" class="btn primary" type="button">打开桌游服务</button>
+      </div>
+      <p id="hallOtherNote" class="hint small">服务没起来时先运行 <code>npm run start:board</code>（<code>scripts/start-board-games.mjs</code>）。</p>
+    </div>
+  </div>
+</section>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="seal" aria-hidden="true">戰</div>
+    <div>
+      <h1>国战沙盘</h1>
+      <p>AI 辅助 · 六角 / 方块战略视图 · 确定性规则</p>
+    </div>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><span>回合</span><b id="turn">—</b></div>
+    <div class="hud-item"><span>阶段</span><b id="phase">—</b></div>
+    <div class="hud-item"><span>预算</span><b id="budget">—</b></div>
+    <div id="connBadge" class="conn-badge">离线</div>
+    <button id="accountToggle" class="btn ghost small" type="button">大厅</button>
+    <button id="connectToggle" class="btn ghost small" type="button">收起设置</button>
+  </div>
+</header>
+
+<form id="connectForm" class="connect-drawer" autocomplete="off">
+  <div class="connect-grid">
+    <div>
+      <label for="server">服务器地址</label>
+      <input id="server" value="http://127.0.0.1:8788" spellcheck="false" />
+    </div>
+    <div>
+      <label for="room">房间 ID</label>
+      <input id="room" placeholder="room-xxx" spellcheck="false" />
+    </div>
+    <div>
+      <label for="seat">席位 ID</label>
+      <input id="seat" placeholder="seat_qin" spellcheck="false" />
+    </div>
+    <div>
+      <label for="token">席位令牌</label>
+      <input id="token" type="password" placeholder="gz_..." autocomplete="off" />
+    </div>
+    <div class="connect-actions">
+      <button id="connect" class="btn primary" type="submit">进入战场</button>
+      <button id="disconnect" class="btn ghost" type="button" disabled>断开</button>
+    </div>
+    <div id="status" class="connect-status">未连接：填入服务器、房间、席位与令牌。令牌只存在内存里。</div>
+
+    <details class="quickstart" id="quickstart">
+      <summary>随机地图（民心/基建）<span class="tag gold">种子可复现</span></summary>
+      <div class="quickstart-grid">
+        <div>
+          <label for="adminToken">管理令牌（仅本地演示）</label>
+          <input id="adminToken" type="password" placeholder="建房/发席位用，不写入 URL" autocomplete="off" />
+        </div>
+        <div>
+          <label for="seed">地图种子</label>
+          <input id="seed" placeholder="留空则随机生成；复制它即可重开同一张图" spellcheck="false" />
+        </div>
+        <div>
+          <label for="scenario">剧本 / 地图规模</label>
+          <select id="scenario"></select>
+        </div>
+        <div>
+          <label for="faction">我方势力</label>
+          <select id="faction"></select>
+        </div>
+        <div>
+          <label for="unlimitedTurns">回合上限</label>
+          <label class="quickstart-check"><input id="unlimitedTurns" type="checkbox" checked /> 不限回合（∞）</label>
+        </div>
+        <div>
+          <label for="llmMode">LLM 参与</label>
+          <select id="llmMode">
+            <option value="off">纯 AI 国家</option>
+            <option value="country">LLM 独立国家</option>
+          </select>
+        </div>
+        <div>
+          <label for="llmFaction">LLM 国家</label>
+          <select id="llmFaction"></select>
+        </div>
+        <div class="quickstart-actions">
+          <button id="randomSeed" class="btn ghost" type="button">随机种子</button>
+          <button id="quickstartGo" class="btn primary" type="button">生成并进入</button>
+        </div>
+        <div id="quickstartStatus" class="connect-status">选择剧本后用管理令牌创建房间（同种子同地图；超大陆支持最多 12 人联机），再自动认领所选势力。管理令牌只驻留内存。</div>
+      </div>
+    </details>
+  </div>
+</form>
+
+
+
+<main class="app">
+  <aside class="col col-left">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>我方</h2>
+        <span class="hint" id="selfTurn">—</span>
+      </div>
+      <div class="panel-body" id="selfPanel">
+        <div class="detail-empty">未连接。地图只读，不会自动下命令。</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>列强</h2>
+        <span class="hint">关系 · 领地 · 兵势</span>
+      </div>
+      <div class="panel-body tight">
+        <table class="factions">
+          <thead>
+            <tr><th>势力</th><th>关系</th><th title="潜在恨意 / 贸易政策（由交战、夺城、毁约累积，和平期缓慢冷却）">恨意·商路</th><th>领地</th><th>兵势</th><th title="全国民心：影响战力、溃败线与低民心动乱放大">全国民心</th></tr>
+          </thead>
+          <tbody id="factions"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>外交</h2>
+        <span class="hint">关系 · 情报 · 宣战/结盟</span>
+      </div>
+      <div class="panel-body tight">
+        <div id="diplomacyPanel" class="diplomacy-panel">
+          <div class="detail-empty">连接后显示各势力关系。迷雾下只有档位；派间谍可看精确驻军。</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>告警</h2>
+        <span class="hint">规则引擎盯盘</span>
+      </div>
+      <div class="panel-body">
+        <ul id="alerts" class="alerts"><li>无</li></ul>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>回合复盘</h2>
+        <span class="hint" id="recapTurn">—</span>
+      </div>
+      <div class="panel-body tight">
+        <div id="turnRecap" class="battle-report">
+          <div class="detail-empty">结算后显示本回合各势力的领地、金粮、民心与兵力变化。</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>战况</h2>
+        <span class="hint" id="battleTurn">—</span>
+      </div>
+      <div class="panel-body tight">
+        <div id="battleReport" class="battle-report">
+          <div class="detail-empty">结算后显示本回合每场战斗的地点、双方损失与民心系数。</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>政令图鉴</h2>
+        <span class="hint">法令持续生效</span>
+      </div>
+      <div class="panel-body">
+        <div id="lawCodex" class="law-codex">
+          <div class="detail-empty">连接房间后显示本剧本的法令效果。</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>兵种图鉴</h2>
+        <span class="hint">攻防 · 成本 · 克制</span>
+      </div>
+      <div class="panel-body">
+        <div id="unitCodex" class="unit-codex">
+          <div class="detail-empty">连接房间后显示本剧本的兵种与克制关系。</div>
+        </div>
+      </div>
+    </section>
+  </aside>
+
+  <section class="col col-center">
+    <div class="map-shell" id="mapShell">
+      <div class="map-toolbar">
+        <div class="tool-group" role="group" aria-label="地图视图">
+          <button class="seg is-active" id="viewMap" type="button">六角地图</button>
+          <button class="seg" id="viewText" type="button">文字拓扑</button>
+        </div>
+        <div class="tool-group" role="group" aria-label="地图缩放">
+          <button class="btn icon" id="zoomOut" type="button" title="缩小">−</button>
+          <span class="tool-label" id="zoomLabel">100%</span>
+          <button class="btn icon" id="zoomIn" type="button" title="放大">＋</button>
+          <button class="btn icon" id="zoomReset" type="button" title="复位视图">⟲</button>
+          <span class="sep"></span>
+          <button class="btn icon" id="fullscreen" type="button" title="全屏">⛶</button>
+        </div>
+      </div>
+
+      <div class="map-hint" id="mapHint">点击地块 → 右侧/详情列出该地可执行操作 · 滚轮缩放 · 拖拽平移</div>
+      <svg id="mapSvg" viewBox="0 0 1296 916" role="img" aria-label="国战六角地图"></svg>
+      <pre id="mapText" aria-label="文字拓扑地图"></pre>
+
+      <div class="map-legend" aria-hidden="true">
+        <span class="lg"><i class="sw self"></i>我方 / 可下令</span>
+        <span class="lg"><i class="sw enemy"></i>可进攻</span>
+        <span class="lg"><i class="sw move"></i>可调动</span>
+        <span class="lg"><i class="sw fog"></i>未探明</span>
+        <span class="lg" id="mapLegendExtra">道路 = 合法邻接</span>
+        <span class="lg water-legend" hidden><i class="sw water"></i>水路（水师）</span>
+        <span class="lg water-legend" hidden><i class="sw bridge"></i>桥（陆军）</span>
+      </div>
+
+      <div class="map-empty" id="mapEmpty">
+        <div class="big-seal">戰</div>
+        <h3>地图未载入</h3>
+        <p>填入服务器、房间、席位与令牌后进入战场</p>
+      </div>
+
+      <div class="battle-hud" id="battleHud" hidden role="status" aria-live="polite">
+        <div class="battle-hud-top">
+          <span class="battle-hud-seal">战</span>
+          <b id="battleHudTitle">交战</b>
+          <span class="battle-hud-step" id="battleHudStep"></span>
+          <button class="battle-hud-close" id="battleHudClose" type="button" title="收起战况">×</button>
+        </div>
+        <div class="battle-hud-sides" id="battleHudSides"></div>
+        <div class="battle-hud-meta" id="battleHudMeta"></div>
+        <div class="battle-hud-foot">
+          <span id="battleHudStatus">—</span>
+          <div class="battle-hud-actions">
+            <button class="btn small ghost" id="battleHudSkip" type="button">跳过动画</button>
+            <button class="btn small ghost" id="battleHudLocate" type="button">定位战场</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="turn-banner" id="turnBanner" role="status" aria-live="polite"><b></b><small></small></div>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </div>
+
+    <section class="panel log-panel">
+      <div class="panel-head">
+        <h2>战报</h2>
+        <span class="hint">状态先定 · 叙事后到</span>
+      </div>
+      <div class="panel-body">
+        <ul class="log" id="logList"><li class="log-empty">尚无战报。</li></ul>
+      </div>
+    </section>
+  </section>
+
+  <aside class="col col-right">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>本回合军令</h2>
+        <span class="hint" id="queueCount">0 / 8</span>
+      </div>
+      <div class="panel-body">
+        <ul class="queue" id="queueList">
+          <li class="queue-empty">点击地图上的己方六角格，再点高亮目标，即可把引擎给的合法动作加入军令。</li>
+        </ul>
+        <div class="queue-actions">
+          <button class="btn primary" id="submit" type="button" disabled>提交军令</button>
+          <button class="btn" id="lock" type="button" disabled>锁定回合</button>
+          <button class="btn ghost" id="advice" type="button" disabled>求军师</button>
+          <button class="btn ghost" id="clear" type="button" disabled>清空</button>
+        </div>
+        <div class="locked-note" id="lockedNote"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>区域详情</h2>
+        <span class="hint" id="regionVis"></span>
+      </div>
+      <div class="panel-body" id="regionDetail">
+        <div class="detail-empty">点击地图上的六角格查看归属、驻军与地形。</div>
+        <div id="regionActions" class="region-actions"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>可执行动作</h2>
+        <span class="hint" id="actionsCount">0</span>
+      </div>
+      <div class="action-filters" id="actionFilters"></div>
+      <div id="actionPairBanner"></div>
+      <div class="actions" id="actions">
+        <div class="actions-empty">连接后显示服务端枚举的合法动作。</div>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<noscript>本页面需要 JavaScript 才能渲染六角地图与提交军令。</noscript>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

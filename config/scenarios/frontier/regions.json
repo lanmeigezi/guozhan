@@ -1,0 +1,293 @@
+{
+  "$comment": "自定义地图：改 name 即可改地名；改 adjacency 可改地形拓扑（必须对称）；地形影响产出/移动。",
+  "regions": [
+    {
+      "id": "guanzhong",
+      "name": "風息原",
+      "terrain": "plains",
+      "adjacency": [
+        "hanzhong",
+        "hedong",
+        "longxi",
+        "luoyang"
+      ],
+      "baseFood": 900,
+      "baseGold": 700,
+      "baseManpower": 90000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "longxi",
+      "name": "白石崗",
+      "terrain": "hills",
+      "adjacency": [
+        "bashu",
+        "guanzhong"
+      ],
+      "baseFood": 400,
+      "baseGold": 300,
+      "baseManpower": 40000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "bashu",
+      "name": "青木川",
+      "terrain": "forest",
+      "adjacency": [
+        "hanzhong",
+        "longxi",
+        "ying"
+      ],
+      "baseFood": 1100,
+      "baseGold": 500,
+      "baseManpower": 70000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "hanzhong",
+      "name": "斷崖嶺",
+      "terrain": "hills",
+      "adjacency": [
+        "bashu",
+        "guanzhong"
+      ],
+      "baseFood": 600,
+      "baseGold": 250,
+      "baseManpower": 35000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "handan",
+      "name": "赤沙丘",
+      "terrain": "plains",
+      "adjacency": [
+        "daliang",
+        "jinyang",
+        "linzi"
+      ],
+      "baseFood": 850,
+      "baseGold": 650,
+      "baseManpower": 85000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "jinyang",
+      "name": "鳴泉谷",
+      "terrain": "hills",
+      "adjacency": [
+        "dai",
+        "handan",
+        "hedong",
+        "shangdang"
+      ],
+      "baseFood": 600,
+      "baseGold": 400,
+      "baseManpower": 55000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "dai",
+      "name": "鹿野",
+      "terrain": "mountain",
+      "adjacency": [
+        "ji",
+        "jinyang"
+      ],
+      "baseFood": 300,
+      "baseGold": 200,
+      "baseManpower": 30000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "daliang",
+      "name": "古渡口",
+      "terrain": "plains",
+      "adjacency": [
+        "handan",
+        "hedong",
+        "linzi",
+        "luoyang",
+        "xinzheng"
+      ],
+      "baseFood": 950,
+      "baseGold": 800,
+      "baseManpower": 80000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "hedong",
+      "name": "落星坪",
+      "terrain": "hills",
+      "adjacency": [
+        "daliang",
+        "guanzhong",
+        "jinyang",
+        "luoyang"
+      ],
+      "baseFood": 650,
+      "baseGold": 450,
+      "baseManpower": 50000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "xinzheng",
+      "name": "鹽鹼灘",
+      "terrain": "plains",
+      "adjacency": [
+        "daliang",
+        "luoyang",
+        "nanyang",
+        "shangdang"
+      ],
+      "baseFood": 600,
+      "baseGold": 550,
+      "baseManpower": 45000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "shangdang",
+      "name": "望川",
+      "terrain": "mountain",
+      "adjacency": [
+        "jinyang",
+        "luoyang",
+        "xinzheng"
+      ],
+      "baseFood": 350,
+      "baseGold": 250,
+      "baseManpower": 28000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "luoyang",
+      "name": "雲夢澤",
+      "terrain": "urban",
+      "adjacency": [
+        "daliang",
+        "guanzhong",
+        "hedong",
+        "nanyang",
+        "shangdang",
+        "xinzheng"
+      ],
+      "baseFood": 700,
+      "baseGold": 900,
+      "baseManpower": 40000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "linzi",
+      "name": "黑岩城",
+      "terrain": "plains",
+      "adjacency": [
+        "daliang",
+        "handan",
+        "langya"
+      ],
+      "baseFood": 1000,
+      "baseGold": 950,
+      "baseManpower": 75000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "langya",
+      "name": "石鼓",
+      "terrain": "forest",
+      "adjacency": [
+        "jiangdong",
+        "linzi"
+      ],
+      "baseFood": 500,
+      "baseGold": 450,
+      "baseManpower": 38000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "ying",
+      "name": "孤城",
+      "terrain": "forest",
+      "adjacency": [
+        "bashu",
+        "jiangdong",
+        "nanyang"
+      ],
+      "baseFood": 900,
+      "baseGold": 600,
+      "baseManpower": 88000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "nanyang",
+      "name": "枯河",
+      "terrain": "plains",
+      "adjacency": [
+        "jiangdong",
+        "luoyang",
+        "xinzheng",
+        "ying"
+      ],
+      "baseFood": 750,
+      "baseGold": 500,
+      "baseManpower": 60000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "jiangdong",
+      "name": "霧隱澤",
+      "terrain": "river",
+      "adjacency": [
+        "langya",
+        "nanyang",
+        "ying"
+      ],
+      "baseFood": 800,
+      "baseGold": 550,
+      "baseManpower": 52000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "ji",
+      "name": "北荒嶺",
+      "terrain": "plains",
+      "adjacency": [
+        "dai",
+        "liaodong"
+      ],
+      "baseFood": 550,
+      "baseGold": 350,
+      "baseManpower": 48000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "liaodong",
+      "name": "遠山",
+      "terrain": "mountain",
+      "adjacency": [
+        "ji"
+      ],
+      "baseFood": 250,
+      "baseGold": 180,
+      "baseManpower": 22000,
+      "strategic": false,
+      "passable": true
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "$comment": "剧本：艾利亚大陆（架空世界）。★本剧本存在的意义是证明架构文档 §6.1 的扩展性承诺：加剧本零代码改动、剧本发现走目录扫描（Histrategy 把剧本 id 硬编码进白名单是它的坑，我们不学）。它与 warring-states 复用同一张 config/map/regions.json —— 换世界观不换地图，正好证明地图与剧本解耦。",
+  "meta": {
+    "id": "aria",
+    "name": "艾利亞：星冠崩碎",
+    "description": "星冠帝國崩潰後的艾利亞大陸：燼落王朝的鍛爐不熄，龍崖公國的戰旗南指，荒嘯部族的獸騎出草原，金穗商盟的艦隊壟斷東岸，荊墻領死守中枢平原，翠谷議庭的林間低語不休。舊都洛陽（星冠聖所）無人敢稱主，六強爭冠。",
+    "startTurn": 1,
+    "maxTurns": 40
+  },
+  "engine": {
+    "moduleOrder": ["economy", "movement", "combat"],
+    "behaviorFingerprint": 1
+  },
+  "timeout": {
+    "human": 300,
+    "ai": 120
+  },
+  "seats": {
+    "humanCapable": ["emberfall", "aurelia", "thornwall"],
+    "majorAi": ["emberfall", "drakmoor", "aurelia"],
+    "minorAi": ["valkyr", "thornwall", "verdantholm"],
+    "spectatorSlots": 4
+  },
+  "$comment_milestones": "★硬性回合里程碑，防 OpenRA-RL 的'只种田不打仗'——软性提示'先发展后进攻'被 32B 模型执行成了'永远经济'，5 局零交锋。必须给可校验的硬指标。",
+  "milestones": [
+    { "turn": 6, "require": { "offensiveArmies": 2 }, "message": "第 6 回合前必须编成至少 2 支可进攻的野战军" },
+    { "turn": 14, "require": { "attacksLaunched": 1 }, "message": "第 14 回合前必须发起至少 1 次进攻" },
+    { "turn": 24, "require": { "regionsCaptured": 1 }, "message": "第 24 回合前必须夺取至少 1 个敌方区域" }
+  ],
+  "llm": {
+    "model": "deepseek-chat",
+    "advisorMaxTokens": 2048,
+    "narrativeMaxTokens": 1024,
+    "intentMaxTokens": 512,
+    "temperature": 0.7,
+    "language": "zh"
+  },
+  "budget": {
+    "perSeatTokenCap": 200000,
+    "perTurnCallCap": 8,
+    "onExceed": "degrade_to_deterministic"
+  },
+  "knowledge": {
+    "mapFile": "../../map/regions.json",
+    "factionsFile": "factions.json",
+    "unitsFile": "../../rules/units.json",
+    "combatFile": "../../rules/combat.json",
+    "economyFile": "../../rules/economy.json",
+    "movementFile": "../../rules/movement.json",
+    "alertsFile": "../../rules/alerts.json"
+  },
+  "victory": {
+    "conquestRegionsRatio": 0.6,
+    "$comment": "占领全图 60% 区域即征服胜利；否则到 maxTurns 按多维评分判定"
+  }
+}

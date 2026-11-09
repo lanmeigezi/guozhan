@@ -1,0 +1,54 @@
+{
+  "$comment": "法令：数据驱动的政策乘数（Histrategy rules-as-data）。加法令 = 往这个文件加一条 + 写进剧本的可选列表，不改代码。所有 effects 键必须与 src/core/state.ts 的 LawDef.effects 对齐，由 config.test.ts 强制。",
+  "laws": [
+    {
+      "id": "juntian",
+      "name": "屯田制",
+      "description": "軍民屯墾，糧產 +30%",
+      "enactGold": 500,
+      "effects": { "foodMultiplier": 1.3 }
+    },
+    {
+      "id": "yantie",
+      "name": "鹽鐵專賣",
+      "description": "官營鹽鐵，金 +15%，民心每回合 -1",
+      "enactGold": 400,
+      "effects": { "goldMultiplier": 1.15, "moralePerTurn": -1 }
+    },
+    {
+      "id": "junxian",
+      "name": "郡縣制",
+      "description": "中央直轄，動亂 -2/回合，金 +5%",
+      "enactGold": 600,
+      "effects": { "unrestPerTurn": -2, "goldMultiplier": 1.05 }
+    },
+    {
+      "id": "jingbing",
+      "name": "精兵令",
+      "description": "精練士卒，戰力 +15%，軍費 +25%",
+      "enactGold": 700,
+      "effects": { "combatPowerMultiplier": 1.15, "upkeepMultiplier": 1.25 }
+    },
+    {
+      "id": "fuyi",
+      "name": "賦役減免",
+      "description": "休養生息，民心 +3/回合，金 -10%",
+      "enactGold": 300,
+      "effects": { "moralePerTurn": 3, "goldMultiplier": 0.9 }
+    },
+    {
+      "id": "jianmin",
+      "name": "簡民放農",
+      "description": "放歸部分兵員務農，糧 +10%，徵兵成本 +10%",
+      "enactGold": 250,
+      "effects": { "foodMultiplier": 1.1, "recruitCostMultiplier": 1.1 }
+    },
+    {
+      "id": "xunu",
+      "name": "鬻奴令",
+      "description": "默許邊境鬻奴；解鎖向相鄰勢力買奴，全國民心 -2/回合、金 +8%",
+      "enactGold": 500,
+      "effects": { "moralePerTurn": -2, "goldMultiplier": 1.08 }
+    }
+  ]
+}

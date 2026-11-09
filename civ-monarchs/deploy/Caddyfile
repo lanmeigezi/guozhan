@@ -1,0 +1,10 @@
+{$CIV_DOMAIN} {
+	# SSE 需要关闭响应缓冲，否则事件会被攒着不推
+	reverse_proxy civ:8790 {
+		flush_interval -1
+	}
+	# 自建反代请勿记录 query：SSE 的 ?token= 会进 access log
+	log {
+		output discard
+	}
+}

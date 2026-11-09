@@ -1,0 +1,13 @@
+{
+  "$comment": "自动起义（grand-front 专属）。动乱达到 100：原主失去区域，当地人口化为低战力起义民兵；原主必须杀光民兵才能重占。民兵未死光前，民心高于原主且相邻的国家可宣称归附；归附后动乱 90、最多 2 万守城民兵（不可调动），3 回合内征兵会再次起义，动乱 ≤50 恢复正常。",
+  "rebelUnitType": "militia",
+  "levyRatio": 1,
+  "rebelCombatMultiplier": 0.25,
+  "claimRequiresAdjacency": false,
+  "claimMoraleLead": 1,
+  "claimedUnrest": 90,
+  "claimedGarrisonCap": 20000,
+  "claimedConscriptionTurns": 3,
+  "normalizeUnrest": 50,
+  "originalReoccupyUnrest": 90
+}

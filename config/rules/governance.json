@@ -1,0 +1,61 @@
+{
+  "$comment": "治理规则（可选）：全国民心 ↔ 地区动乱 ↔ 地区基建。只有 knowledge.governanceFile 指向本文件的剧本才启用；旧剧本不读取、哈希不变。民心是全国性的，动乱与基建是地区性的。",
+  "infrastructure": {
+    "$comment": "逐级修建，不可跳级。人口增长是「本区额外绝对比率」：基础 0.3%/回合 + 基建加成。基建点按全国汇总，每 6 点 +1 全国民心/回合。",
+    "maxLevel": 4,
+    "levels": [
+      {
+        "level": 1,
+        "name": "驿亭",
+        "costGold": 400,
+        "unrestRelief": 8,
+        "unrestReductionPerTurn": 1,
+        "moralePoints": 1,
+        "populationGrowthBonus": 0.004
+      },
+      {
+        "level": 2,
+        "name": "仓廪",
+        "costGold": 700,
+        "unrestRelief": 12,
+        "unrestReductionPerTurn": 2,
+        "moralePoints": 2,
+        "populationGrowthBonus": 0.008
+      },
+      {
+        "level": 3,
+        "name": "学宫",
+        "costGold": 1100,
+        "unrestRelief": 18,
+        "unrestReductionPerTurn": 3,
+        "moralePoints": 3,
+        "populationGrowthBonus": 0.014
+      },
+      {
+        "level": 4,
+        "name": "水利",
+        "costGold": 1600,
+        "unrestRelief": 25,
+        "unrestReductionPerTurn": 5,
+        "moralePoints": 4,
+        "populationGrowthBonus": 0.022
+      }
+    ],
+    "moralePointsPerTurnPoint": 6,
+    "moraleOnBuild": 2
+  },
+  "lowMoraleUnrest": {
+    "$comment": "factor = 1 + max(0, threshold - morale)/threshold × maxUnrestBonus。民心 60 及以上不放大；民心 0 时 ×2.5。",
+    "threshold": 60,
+    "maxUnrestBonus": 1.5,
+    "recruitBase": 4,
+    "battleBase": 5,
+    "captureBase": 25,
+    "warDeclarationBase": 8
+  },
+  "unrestEffects": {
+    "$comment": "地区动乱只惩罚本区：产出乘数 = 1 - unrest × outputPenaltyPerPoint；守备乘数 = 1 - unrest × defensePenaltyPerPoint。",
+    "outputPenaltyPerPoint": 0.004,
+    "defensePenaltyPerPoint": 0.003
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "$comment": "告警规则（P13：规则代码替 LLM 盯盘）。★不用字符串表达式求值（无 eval，安全且可静态校验），改用 kind + params 的结构化条件，由 src/ai/alerts.ts 解释。kind 必须在 ALLOWED_ALERT_KINDS 白名单内，由 config.test.ts 强制。",
+  "alerts": [
+    {
+      "id": "UNDER_ATTACK",
+      "priority": 1,
+      "kind": "region_attacked_this_turn",
+      "params": {},
+      "message": "{region} 遭 {enemy} 進攻"
+    },
+    {
+      "id": "MILESTONE_MISSED",
+      "priority": 1,
+      "kind": "milestone_missed",
+      "params": {},
+      "message": "里程碑未達成：{requirement}"
+    },
+    {
+      "id": "FOOD_SHORTAGE",
+      "priority": 2,
+      "kind": "food_below_upkeep_multiple",
+      "params": { "multiple": 2 },
+      "message": "糧草告急：存糧僅夠約 {turns} 回合軍需"
+    },
+    {
+      "id": "BANKRUPT",
+      "priority": 2,
+      "kind": "gold_below_zero",
+      "params": {},
+      "message": "國庫枯竭：無法支付軍費，士氣與兵力將流失"
+    },
+    {
+      "id": "BORDER_EXPOSED",
+      "priority": 2,
+      "kind": "border_garrison_below_ratio",
+      "params": { "ratio": 0.6 },
+      "message": "{region} 邊防空虛：守軍不足鄰國 {enemy} 的 {ratio}"
+    },
+    {
+      "id": "MORALE_LOW",
+      "priority": 3,
+      "kind": "morale_below",
+      "params": { "value": 35 },
+      "message": "民心低迷（{value}/100），徵兵與產出受抑"
+    },
+    {
+      "id": "IDLE_ARMY",
+      "priority": 3,
+      "kind": "idle_troops_ratio_above",
+      "params": { "ratio": 0.5 },
+      "message": "大軍閒置：{ratio} 的部隊本回合未行動，白耗軍需"
+    },
+    {
+      "id": "UNREST_HIGH",
+      "priority": 3,
+      "kind": "region_unrest_above",
+      "params": { "value": 60 },
+      "message": "{region} 民怨沸騰（動亂 {value}/100），恐生叛亂"
+    },
+    {
+      "id": "NO_RECRUITMENT",
+      "priority": 4,
+      "kind": "turns_since_recruit_at_least",
+      "params": { "turns": 3 },
+      "message": "已連續 {turns} 回合未徵兵，軍力停滯"
+    },
+    {
+      "id": "NO_OFFENSIVE",
+      "priority": 1,
+      "kind": "turns_since_attack_at_least",
+      "params": { "turns": 8 },
+      "message": "已連續 {turns} 回合未發起任何進攻"
+    }
+  ],
+  "maxAlertsPerSnapshot": 8,
+  "$comment_why": "最後兩條是針對 OpenRA-RL「只種田不打仗」事故的對策：它的 IDLE ARMY 告警只統計**已存在**的部隊，而 AI 根本沒造兵 ⇒ 告警無從觸發。所以告警條件必須覆蓋「該做而沒做」。"
+}

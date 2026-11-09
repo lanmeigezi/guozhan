@@ -1,0 +1,10 @@
+{
+  "display_name": "国战沙盘 + 桌游合集",
+  "loading_order": 100,
+  "js": "index.js",
+  "css": "panel.css",
+  "author": "guozhan (AI 辅助国战模拟)",
+  "version": "0.9.1",
+  "home_page": "https://example.invalid/guozhan",
+  "auto_update": false
+}

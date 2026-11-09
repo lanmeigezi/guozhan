@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "id": "stellar-monarchs-v1",
+  "name": "群星君主 · 低推演强度 / 高 DM 权重",
+  "note": "对应 UP 主给出的第 2 条改造：推演规则与引擎层剥离，降低自然推演强度、提高 DM 修改权重。改本文件即可，不需要改引擎代码。",
+  "engine": {
+    "startYear": -3000,
+    "yearsPerTurn": 25,
+    "maxTurns": 120,
+    "regionCount": 48,
+    "civCount": 12,
+    "map": { "cols": 8, "rows": 6 }
+  },
+  "simulation": {
+    "strength": 0.35,
+    "note": "0 = 世界完全静止，只由君主与 DM 推动；1 = 官方强度的自然演化。视频效果是低值。",
+    "foodYield": 1.6,
+    "oreYield": 1.1,
+    "energyYield": 0.7,
+    "knowledgeYield": 1.4,
+    "populationGrowth": 0.05,
+    "techTrickle": 1.8,
+    "warChance": 0.1,
+    "disasterChance": 0.04,
+    "spreadChance": 0.14,
+    "unrestDrift": 0.02,
+    "stabilityDrift": 0.6
+  },
+  "dm": {
+    "weight": 0.75,
+    "note": "DM / Harness 修正的全局系数。调高即 DM 说了算，调低即引擎说了算；与 simulation.strength 是两个独立旋钮。",
+    "maxEditsPerTurn": 4,
+    "maxMagnitude": 3,
+    "allowed": [
+      "boost", "disaster", "protect", "ally", "declare", "cede", "found",
+      "halt", "unity", "policy", "treaty", "unrest", "keep", "destroy"
+    ],
+    "effects": {
+      "boost":    { "tech": 14, "development": 0.5, "knowledge": 6 },
+      "disaster": { "population": -0.12, "stability": -10, "development": -0.3 },
+      "protect":  { "shield": 1 },
+      "ally":     { "relation": 2, "stability": 3 },
+      "declare":  { "relation": -2, "military": -4 },
+      "cede":     { "transfer": 1 },
+      "found":    { "grant": 1, "stability": 4 },
+      "halt":     { "expansionLock": 1 },
+      "unity":    { "stability": 12, "shield": 1 },
+      "policy":   { "tech": 6, "stability": 4 },
+      "treaty":   { "relation": 2, "knowledge": 4 },
+      "unrest":   { "stability": -12, "military": -3 },
+      "keep":     { "stability": 10 },
+      "destroy":  { "collapse": 1 }
+    }
+  },
+  "epochs": [
+    { "id": "tribe",        "name": "部落",   "tech": 0 },
+    { "id": "citystate",    "name": "城邦",   "tech": 60 },
+    { "id": "kingdom",      "name": "王国",   "tech": 160 },
+    { "id": "empire",       "name": "帝国",   "tech": 300 },
+    { "id": "industrial",   "name": "工业",   "tech": 480 },
+    { "id": "information",  "name": "信息",   "tech": 660 },
+    { "id": "space",        "name": "太空",   "tech": 820 },
+    { "id": "interstellar", "name": "星际",   "tech": 1000 }
+  ],
+  "victory": {
+    "type": "interstellar",
+    "requiredTech": 1000,
+    "requiredColonies": 2,
+    "note": "率先进入「星际」时代且拥有至少 2 个外星殖民地的文明获胜；若第 maxTurns 回合仍无人达成，按综合分判胜。"
+  },
+  "actions": {
+    "maxPerCivPerTurn": 1,
+    "maxMagnitude": 3,
+    "note": "君主模型只输出意图，所有数值由引擎按本表裁决；多余字段一律拒绝（z.strict() 等价语义）。",
+    "types": {
+      "invest":     { "label": "兴修",   "cost": { "ore": 6 },            "effect": { "development": 0.6 }, "target": "region" },
+      "research":   { "label": "治学",   "cost": { "food": 4 },           "effect": { "tech": 12 },        "target": "none" },
+      "expand":     { "label": "拓土",   "cost": { "food": 8 },           "effect": { "claim": 1 },        "target": "region" },
+      "attack":     { "label": "用兵",   "cost": { "food": 10, "ore": 4 }, "effect": { "power": 1 },       "target": "region" },
+      "diplomacy":  { "label": "邦交",   "cost": { "knowledge": 4 },      "effect": { "stability": 6 },    "target": "civ" },
+      "fortify":    { "label": "整军",   "cost": { "ore": 8 },            "effect": { "military": 8 },     "target": "none" },
+      "stabilize":  { "label": "安民",   "cost": { "food": 6 },           "effect": { "stability": 12 },   "target": "none" },
+      "colonize":   { "label": "殖民",   "cost": { "energy": 20, "ore": 12 }, "effect": { "colonies": 1 }, "target": "none", "requiresEpoch": "space" }
+    }
+  },
+  "costs": {
+    "developmentMax": 5,
+    "militaryMax": 100,
+    "stabilityMin": 0,
+    "stabilityMax": 100,
+    "populationMin": 1
+  },
+  "ai": {
+    "concurrency": 3,
+    "timeoutMs": 15000,
+    "maxTokensPerDecision": 320,
+    "note": "12 席并发上限、单席超时与 token 预算；超时/缺 key 一律降级为离线确定性君主，不阻塞推演。"
+  }
+}

@@ -1,0 +1,119 @@
+{
+  "$comment": "超大陆 · 十二雄。半径 6 的六角地图（127 格）+ 12 势力，支持 2–12 人联机；旧剧本生成结果不受影响。",
+  "meta": {
+    "id": "grand-front",
+    "name": "超大陸 · 十二雄",
+    "description": "半径 6 的超大六角战场，十二势力争雄。地图更大、接壤更多，支持最多 12 人联机；AI 会按疾攻/守成/无常三种原型刷新；新增潜在恨意、鬻奴令与自动起义：频繁交战会让双方外交/贸易转冷，鬻奴令可向相邻势力买奴，动乱满 100 会爆发起义，原主必须杀光民兵才能重占，高民心国家可宣称归附。",
+    "startTurn": 1,
+    "maxTurns": 60
+  },
+  "generator": {
+    "type": "hexboard",
+    "version": 1,
+    "radius": 6,
+    "factions": 12,
+    "namespace": "grand-front"
+  },
+  "engine": {
+    "moduleOrder": [
+      "economy",
+      "statecraft",
+      "movement",
+      "formation",
+      "combat",
+      "slavetrade",
+      "rebellion",
+      "governance",
+      "grudge"
+    ],
+    "behaviorFingerprint": 1
+  },
+  "timeout": {
+    "human": 420,
+    "ai": 180
+  },
+  "seats": {
+    "humanCapable": [
+      "north",
+      "east",
+      "west",
+      "south",
+      "qin",
+      "chu",
+      "qi",
+      "yan",
+      "zhao",
+      "wei",
+      "han",
+      "wu"
+    ],
+    "majorAi": [
+      "north",
+      "east"
+    ],
+    "minorAi": [
+      "west",
+      "south",
+      "qin",
+      "chu",
+      "qi",
+      "yan",
+      "zhao",
+      "wei",
+      "han",
+      "wu"
+    ],
+    "spectatorSlots": 6
+  },
+  "milestones": [
+    {
+      "turn": 10,
+      "require": {
+        "offensiveArmies": 2
+      },
+      "message": "第 10 回合前必须编成至少 2 支可进攻的野战军"
+    },
+    {
+      "turn": 25,
+      "require": {
+        "attacksLaunched": 1
+      },
+      "message": "第 25 回合前必须发起至少 1 次进攻"
+    },
+    {
+      "turn": 40,
+      "require": {
+        "regionsCaptured": 1
+      },
+      "message": "第 40 回合前必须夺取至少 1 个敌方区域"
+    }
+  ],
+  "llm": {
+    "model": "deepseek-chat",
+    "advisorMaxTokens": 2048,
+    "narrativeMaxTokens": 1024,
+    "intentMaxTokens": 512,
+    "temperature": 0.7,
+    "language": "zh"
+  },
+  "budget": {
+    "perSeatTokenCap": 120000,
+    "perTurnCallCap": 6,
+    "onExceed": "degrade_to_deterministic"
+  },
+  "knowledge": {
+    "factionsFile": "factions.json",
+    "unitsFile": "units.json",
+    "combatFile": "../../rules/combat.json",
+    "economyFile": "../../rules/economy.json",
+    "movementFile": "../../rules/movement.json",
+    "lawsFile": "laws.json",
+    "alertsFile": "../../rules/alerts.json",
+    "governanceFile": "governance.json",
+    "slaveTradeFile": "slave-trade.json",
+    "rebellionFile": "rebellion.json"
+  },
+  "victory": {
+    "conquestRegionsRatio": 0.4
+  }
+}

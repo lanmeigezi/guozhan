@@ -1,0 +1,21 @@
+{
+  "$comment": "奴隶贸易（鬻奴令）参数。只有 grand-front 的 knowledge.slaveTradeFile 指向本文件；旧剧本不读取，contentHash 不变。买方必须已颁布 xunu；只能从相邻的卖方地块买入；奴隶只能是 militia 并带 bandit_conscript 头衔。",
+  "lawId": "xunu",
+  "slaveUnitType": "militia",
+  "priceGoldPerThousand": 90,
+  "minPerTrade": 500,
+  "maxPerTrade": 10000,
+  "maxShareOfRegionPopulation": 0.25,
+  "buyerMoraleCost": 4,
+  "sellerMoraleCost": 3,
+  "banditUnrestPerTurn": 4,
+  "grudgeBlock": 70,
+  "grudgePriceSurcharge": 0.02,
+  "relationPriceMultiplier": {
+    "alliance": 0.85,
+    "peace": 1,
+    "truce": 1,
+    "neutral": 1.25,
+    "war": 1
+  }
+}

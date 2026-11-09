@@ -1,0 +1,48 @@
+# ===== 依赖与构建产物 =====
+node_modules/
+dist/
+*.tsbuildinfo
+
+# ===== 运行时数据（SQLite 房间库、备份、pid）—— 绝不进版本库 =====
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# ===== 密钥：只留样例 =====
+.env
+.env.*
+!.env.example
+
+# ===== 发布产物（APK / zip / 校验和）—— 走 GitHub Releases，不进 git =====
+release/
+apk/
+civ-monarchs/release/
+
+# ===== 构建 / 校验临时产物 =====
+.verify-stage/
+.preview/
+.ui-data*/
+.qoder-credits/
+
+# ===== 工具二进制（cloudflared 等，55MB+，单独分发） =====
+tools/bin/
+
+# ===== 会话残留 / 临时文件 =====
+*.log
+*.task-backup.xml
+dsh-splash-previews/
+dsh-archived-ids-*.json
+.ai-balance2.mjs
+
+# ===== 巨型任务转储（非源码，已另存本地，不进版本库） =====
+任务：自主构建“AI_辅助国战模拟”轻量级后端原型（分支）（分支）_2026-11-06_21-36.md
+优化大富翁游戏机制_2026-11-08_00-47.md
+重新链接Chrome插件_2026-11-07_00-59.md
+
+# ===== 编辑器 / 操作系统 =====
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

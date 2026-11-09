@@ -1,0 +1,214 @@
+{
+  "$comment": "鐵河棋局初始局面：北庭/東海/西川/南越各据一方，中洲（b4）为中立港。北庭↔西川隔南渡桥开战；東海↔南越隔石桥开战。每个势力都至少有一个港口和水师，保证水路机制从第一回合可玩。",
+  "factions": [
+    {
+      "id": "north",
+      "name": "北庭",
+      "ruler": "北庭侯·段弘",
+      "color": "#4a6fa5",
+      "capital": "b2",
+      "territories": [
+        "a1",
+        "a2",
+        "a3",
+        "b1",
+        "b2",
+        "b3"
+      ],
+      "gold": 2600,
+      "food": 6000,
+      "morale": 72,
+      "taxRate": 0.3,
+      "laws": [
+        "junxian",
+        "juntian"
+      ],
+      "personality": {
+        "aggression": 0.75,
+        "diplomacy": "calculating",
+        "description": "据北岸六城，握渡口与河朔；骑兵与舟师并重，欲先取江南。"
+      },
+      "units": [
+        {
+          "id": "u_north_1",
+          "region": "b2",
+          "type": "spearman",
+          "troops": 18000
+        },
+        {
+          "id": "u_north_2",
+          "region": "a2",
+          "type": "cavalry",
+          "troops": 8000
+        },
+        {
+          "id": "u_north_3",
+          "region": "b1",
+          "type": "riverfleet",
+          "troops": 6000
+        }
+      ]
+    },
+    {
+      "id": "east",
+      "name": "東海",
+      "ruler": "东海公·吕衡",
+      "color": "#c9a227",
+      "capital": "b5",
+      "territories": [
+        "a4",
+        "a5",
+        "a6",
+        "b5",
+        "b6"
+      ],
+      "gold": 3200,
+      "food": 5200,
+      "morale": 68,
+      "taxRate": 0.28,
+      "laws": [
+        "yantie"
+      ],
+      "personality": {
+        "aggression": 0.55,
+        "diplomacy": "mercantile",
+        "description": "东岸商盟，靠盐铁与江防致富；临江港是其命门。"
+      },
+      "units": [
+        {
+          "id": "u_east_1",
+          "region": "b5",
+          "type": "swordsman",
+          "troops": 16000
+        },
+        {
+          "id": "u_east_2",
+          "region": "a5",
+          "type": "archer",
+          "troops": 10000
+        },
+        {
+          "id": "u_east_3",
+          "region": "b5",
+          "type": "riverfleet",
+          "troops": 7000
+        }
+      ]
+    },
+    {
+      "id": "west",
+      "name": "西川",
+      "ruler": "西川王·孟昶",
+      "color": "#8b4a3b",
+      "capital": "c1",
+      "territories": [
+        "c1",
+        "c2",
+        "c3",
+        "d1",
+        "d2",
+        "d3"
+      ],
+      "gold": 2200,
+      "food": 6200,
+      "morale": 70,
+      "taxRate": 0.3,
+      "laws": [
+        "junxian"
+      ],
+      "personality": {
+        "aggression": 0.6,
+        "diplomacy": "defensive",
+        "description": "西岸山国，凭江左港与南渡桥自守；山地步卒耐战。"
+      },
+      "units": [
+        {
+          "id": "u_west_1",
+          "region": "d2",
+          "type": "spearman",
+          "troops": 15000
+        },
+        {
+          "id": "u_west_2",
+          "region": "c1",
+          "type": "swordsman",
+          "troops": 12000
+        },
+        {
+          "id": "u_west_3",
+          "region": "c1",
+          "type": "riverfleet",
+          "troops": 5000
+        }
+      ]
+    },
+    {
+      "id": "south",
+      "name": "南越",
+      "ruler": "南越王·赵佗",
+      "color": "#3e7b5a",
+      "capital": "d5",
+      "territories": [
+        "c4",
+        "c5",
+        "c6",
+        "d4",
+        "d5",
+        "d6"
+      ],
+      "gold": 2800,
+      "food": 5600,
+      "morale": 74,
+      "taxRate": 0.26,
+      "laws": [
+        "jingbing"
+      ],
+      "personality": {
+        "aggression": 0.8,
+        "diplomacy": "raiding",
+        "description": "南岸水乡之国，善舟楫；浔阳港与石桥是北上的两只脚。"
+      },
+      "units": [
+        {
+          "id": "u_south_1",
+          "region": "d5",
+          "type": "spearman",
+          "troops": 17000
+        },
+        {
+          "id": "u_south_2",
+          "region": "c5",
+          "type": "cavalry",
+          "troops": 9000
+        },
+        {
+          "id": "u_south_3",
+          "region": "c4",
+          "type": "riverfleet",
+          "troops": 8000
+        }
+      ]
+    }
+  ],
+  "neutralTerritories": [
+    {
+      "id": "b4",
+      "garrison": {
+        "type": "spearman",
+        "troops": 5000
+      }
+    }
+  ],
+  "initialRelations": [
+    {
+      "a": "north",
+      "b": "west",
+      "kind": "war"
+    },
+    {
+      "a": "east",
+      "b": "south",
+      "kind": "war"
+    }
+  ]
+}

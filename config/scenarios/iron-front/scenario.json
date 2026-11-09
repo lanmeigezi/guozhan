@@ -1,0 +1,93 @@
+{
+  "$comment": "第二模式：鐵河棋局。规则层仍是邻接图，但地图是连续方块棋盘；水路只在 waterRoutes 里，陆军不能走，水师可一回合连走多格。剧本用自己的 map/layout/units，其他规则复用共享配置。",
+  "meta": {
+    "id": "iron-front",
+    "name": "鐵河棋局",
+    "description": "大河横贯南北，四国隔水对峙。陆军只走渡口与石桥，水师沿蓝色水路一回合可连下数港。",
+    "startTurn": 1,
+    "maxTurns": 30
+  },
+  "engine": {
+    "moduleOrder": [
+      "economy",
+      "statecraft",
+      "movement",
+      "formation",
+      "combat",
+      "governance"
+    ],
+    "behaviorFingerprint": 1
+  },
+  "timeout": {
+    "human": 300,
+    "ai": 120
+  },
+  "seats": {
+    "humanCapable": [
+      "north",
+      "east",
+      "west",
+      "south"
+    ],
+    "majorAi": [
+      "north",
+      "east"
+    ],
+    "minorAi": [
+      "west",
+      "south"
+    ],
+    "spectatorSlots": 2
+  },
+  "milestones": [
+    {
+      "turn": 6,
+      "require": {
+        "offensiveArmies": 2
+      },
+      "message": "第 6 回合前必须编成至少 2 支可进攻的野战军"
+    },
+    {
+      "turn": 12,
+      "require": {
+        "attacksLaunched": 1
+      },
+      "message": "第 12 回合前必须发起至少 1 次进攻"
+    },
+    {
+      "turn": 20,
+      "require": {
+        "regionsCaptured": 1
+      },
+      "message": "第 20 回合前必须夺取至少 1 个敌方区域"
+    }
+  ],
+  "llm": {
+    "model": "deepseek-chat",
+    "advisorMaxTokens": 2048,
+    "narrativeMaxTokens": 1024,
+    "intentMaxTokens": 512,
+    "temperature": 0.7,
+    "language": "zh"
+  },
+  "budget": {
+    "perSeatTokenCap": 200000,
+    "perTurnCallCap": 8,
+    "onExceed": "degrade_to_deterministic"
+  },
+  "knowledge": {
+    "mapFile": "../../map/iron-regions.json",
+    "layoutFile": "../../map/iron-layout.json",
+    "factionsFile": "factions.json",
+    "unitsFile": "units.json",
+    "combatFile": "../../rules/combat.json",
+    "economyFile": "../../rules/economy.json",
+    "movementFile": "../../rules/movement.json",
+    "lawsFile": "../../rules/laws.json",
+    "alertsFile": "../../rules/alerts.json",
+    "governanceFile": "../../rules/governance.json"
+  },
+  "victory": {
+    "conquestRegionsRatio": 0.6
+  }
+}

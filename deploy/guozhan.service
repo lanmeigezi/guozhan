@@ -1,0 +1,41 @@
+[Unit]
+Description=guozhan —— AI 辅助国战模拟后端
+Documentation=file:///opt/guozhan/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=guozhan
+Group=guozhan
+WorkingDirectory=/opt/guozhan
+# 环境变量只从 .env 读（含 GUOZHAN_TOKEN / GUOZHAN_ORIGINS / LLM_API_KEY）
+EnvironmentFile=/opt/guozhan/.env
+# ★直接跑构建产物，不跑 scripts/start.sh：开机时不该做 npm ci / build
+#   （升级流程：宿主机 npm ci && npm run build，然后 systemctl restart guozhan）
+ExecStart=/usr/bin/node --enable-source-maps dist/main.js
+Restart=on-failure
+RestartSec=3
+# 曾经因为 OOM 被内核杀掉却没留痕迹：限制内存并让它重启可见
+MemoryMax=1G
+CPUQuota=150%
+TasksMax=256
+
+# ── 加固（轻量机上没有容器隔离，至少把文件系统与内核面收窄）──
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+# 唯一可写路径 = 数据目录（房间库 + WAL + 备份）
+ReadWritePaths=/opt/guozhan/data
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

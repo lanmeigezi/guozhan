@@ -1,0 +1,151 @@
+{
+  "$comment": "战国七雄初始状态。★territories 必须与 map/regions.json 的 id 对得上，且除 luoyang(中立) 外每个区域恰好属于一个势力 —— 由 config.test.ts 强制，防止'一块地两国同时拥有'这种静默错账。",
+  "factions": [
+    {
+      "id": "qin",
+      "name": "秦",
+      "ruler": "秦王政",
+      "color": "#1a1a1a",
+      "capital": "guanzhong",
+      "territories": ["guanzhong", "longxi", "bashu", "hanzhong"],
+      "gold": 3000,
+      "food": 8000,
+      "morale": 75,
+      "taxRate": 0.3,
+      "laws": ["juntian", "junxian"],
+      "personality": { "aggression": 0.85, "diplomacy": "calculating", "description": "虎狼之秦，耕戰立國，志在一統" },
+      "units": [
+        { "id": "u_qin_1", "region": "guanzhong", "type": "spearman", "troops": 20000 },
+        { "id": "u_qin_2", "region": "guanzhong", "type": "cavalry", "troops": 8000 },
+        { "id": "u_qin_3", "region": "hanzhong", "type": "swordsman", "troops": 12000 },
+        { "id": "u_qin_4", "region": "longxi", "type": "militia", "troops": 10000 }
+      ]
+    },
+    {
+      "id": "zhao",
+      "name": "趙",
+      "ruler": "趙王遷",
+      "color": "#8b0000",
+      "capital": "handan",
+      "territories": ["handan", "jinyang", "dai"],
+      "gold": 2200,
+      "food": 5500,
+      "morale": 72,
+      "taxRate": 0.28,
+      "laws": ["jingbing"],
+      "personality": { "aggression": 0.7, "diplomacy": "arrogant", "description": "胡服騎射，山東六國中唯一能與秦軍野戰者" },
+      "units": [
+        { "id": "u_zhao_1", "region": "handan", "type": "cavalry", "troops": 15000 },
+        { "id": "u_zhao_2", "region": "handan", "type": "spearman", "troops": 18000 },
+        { "id": "u_zhao_3", "region": "jinyang", "type": "swordsman", "troops": 12000 },
+        { "id": "u_zhao_4", "region": "dai", "type": "militia", "troops": 8000 }
+      ]
+    },
+    {
+      "id": "wei",
+      "name": "魏",
+      "ruler": "魏王假",
+      "color": "#4b0082",
+      "capital": "daliang",
+      "territories": ["daliang", "hedong"],
+      "gold": 2800,
+      "food": 5000,
+      "morale": 68,
+      "taxRate": 0.32,
+      "laws": ["yantie"],
+      "personality": { "aggression": 0.45, "diplomacy": "pragmatic", "description": "四戰之地，魏武卒餘威尚在，但已力竭" },
+      "units": [
+        { "id": "u_wei_1", "region": "daliang", "type": "spearman", "troops": 20000 },
+        { "id": "u_wei_2", "region": "daliang", "type": "archer", "troops": 10000 },
+        { "id": "u_wei_3", "region": "hedong", "type": "militia", "troops": 12000 }
+      ]
+    },
+    {
+      "id": "han",
+      "name": "韓",
+      "ruler": "韓王安",
+      "color": "#2f4f4f",
+      "capital": "xinzheng",
+      "territories": ["xinzheng", "shangdang"],
+      "gold": 1800,
+      "food": 4000,
+      "morale": 60,
+      "taxRate": 0.3,
+      "laws": ["junxian"],
+      "personality": { "aggression": 0.3, "diplomacy": "defensive", "description": "天下之樞，勁弩之國，然地狹民寡，朝不保夕" },
+      "units": [
+        { "id": "u_han_1", "region": "xinzheng", "type": "spearman", "troops": 15000 },
+        { "id": "u_han_2", "region": "shangdang", "type": "archer", "troops": 10000 },
+        { "id": "u_han_3", "region": "xinzheng", "type": "militia", "troops": 8000 }
+      ]
+    },
+    {
+      "id": "qi",
+      "name": "齊",
+      "ruler": "齊王建",
+      "color": "#daa520",
+      "capital": "linzi",
+      "territories": ["linzi", "langya"],
+      "gold": 4000,
+      "food": 5000,
+      "morale": 70,
+      "taxRate": 0.25,
+      "laws": ["yantie", "fuyi"],
+      "personality": { "aggression": 0.25, "diplomacy": "friendly", "description": "魚鹽之利甲天下，富而不強，坐觀成敗" },
+      "units": [
+        { "id": "u_qi_1", "region": "linzi", "type": "swordsman", "troops": 18000 },
+        { "id": "u_qi_2", "region": "linzi", "type": "archer", "troops": 12000 },
+        { "id": "u_qi_3", "region": "langya", "type": "militia", "troops": 10000 }
+      ]
+    },
+    {
+      "id": "chu",
+      "name": "楚",
+      "ruler": "楚王負芻",
+      "color": "#228b22",
+      "capital": "ying",
+      "territories": ["ying", "nanyang", "jiangdong"],
+      "gold": 2500,
+      "food": 7000,
+      "morale": 65,
+      "taxRate": 0.26,
+      "laws": ["jianmin"],
+      "personality": { "aggression": 0.5, "diplomacy": "hostile", "description": "地方五千里，帶甲百萬，然貴族分權，令不出郢都" },
+      "units": [
+        { "id": "u_chu_1", "region": "ying", "type": "spearman", "troops": 22000 },
+        { "id": "u_chu_2", "region": "ying", "type": "swordsman", "troops": 15000 },
+        { "id": "u_chu_3", "region": "nanyang", "type": "militia", "troops": 14000 },
+        { "id": "u_chu_4", "region": "jiangdong", "type": "archer", "troops": 10000 }
+      ]
+    },
+    {
+      "id": "yan",
+      "name": "燕",
+      "ruler": "燕王喜",
+      "color": "#4682b4",
+      "capital": "ji",
+      "territories": ["ji", "liaodong"],
+      "gold": 1600,
+      "food": 3800,
+      "morale": 62,
+      "taxRate": 0.24,
+      "laws": ["fuyi"],
+      "personality": { "aggression": 0.35, "diplomacy": "neutral", "description": "苦寒之地，易水送別猶在耳，圖窮匕見已成往事" },
+      "units": [
+        { "id": "u_yan_1", "region": "ji", "type": "cavalry", "troops": 12000 },
+        { "id": "u_yan_2", "region": "ji", "type": "spearman", "troops": 14000 },
+        { "id": "u_yan_3", "region": "liaodong", "type": "militia", "troops": 8000 }
+      ]
+    }
+  ],
+  "$comment_neutral": "luoyang(洛陽) 为周室旧地，开局中立、无驻军，是各方争夺的第一个目标",
+  "neutralTerritories": [
+    { "id": "luoyang", "garrison": { "type": "militia", "troops": 6000 } }
+  ],
+  "initialRelations": [
+    { "a": "qin", "b": "han", "kind": "war", "sinceTurn": 0 },
+    { "a": "qin", "b": "yan", "kind": "alliance", "sinceTurn": 0 },
+    { "a": "zhao", "b": "wei", "kind": "truce", "sinceTurn": 0 },
+    { "a": "chu", "b": "qi", "kind": "peace", "sinceTurn": 0 }
+  ]
+}

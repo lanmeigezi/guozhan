@@ -1,0 +1,14 @@
+{
+  "_comment": "把下面 mcpServers 的内容合并进你的 MCP 客户端配置（如 ~/.workbuddy/mcp.json、Claude Desktop、Cline 等）。先 npm start 启动服务端，再让客户端拉起本进程。路径请改成实际解压位置。可选：由人类房主额外填 CIV_ADMIN_TOKEN，仅供 civ_set_seats 只写调整席位；MCP 刻意不提供任何可读取席位分配的工具。",
+  "mcpServers": {
+    "civ-monarchs": {
+      "command": "node",
+      "args": ["D:/酒馆游戏/civ-monarchs/src/mcp/server.js"],
+      "env": {
+        "CIV_API_BASE": "http://127.0.0.1:8790",
+        "CIV_ROOM_ID": "room-1",
+        "CIV_TOKEN": ""
+      }
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "$comment": "随机地图模式：每局用 rootSeed 程序化生成一张六角棋盘（水域/港口/水路/地形/势力领地/首都/开局部队/战争关系）。地图不落静态文件，由 src/server/random-map.ts 在装载时确定性生成；contentHash 由生成结果计算，因此同种子可复现、换种子即新图。",
+  "meta": {
+    "id": "random-front",
+    "name": "隨機六角戰場",
+    "description": "星冠崩碎后的乱世，山河每局重排。水域、港口、桥与四国疆界都由种子决定；输入同一个种子即可重开同一张地图。",
+    "startTurn": 1,
+    "maxTurns": 30
+  },
+  "generator": {
+    "type": "hexboard",
+    "version": 1,
+    "radius": 3,
+    "factions": 4
+  },
+  "engine": {
+    "moduleOrder": ["economy", "movement", "combat"],
+    "behaviorFingerprint": 1
+  },
+  "timeout": { "human": 300, "ai": 120 },
+  "seats": {
+    "humanCapable": ["north", "east", "west", "south"],
+    "majorAi": ["north", "east"],
+    "minorAi": ["west", "south"],
+    "spectatorSlots": 2
+  },
+  "milestones": [
+    { "turn": 6, "require": { "offensiveArmies": 2 }, "message": "第 6 回合前必须编成至少 2 支可进攻的野战军" },
+    { "turn": 12, "require": { "attacksLaunched": 1 }, "message": "第 12 回合前必须发起至少 1 次进攻" },
+    { "turn": 20, "require": { "regionsCaptured": 1 }, "message": "第 20 回合前必须夺取至少 1 个敌方区域" }
+  ],
+  "llm": { "model": "deepseek-chat", "advisorMaxTokens": 2048, "narrativeMaxTokens": 1024, "intentMaxTokens": 512, "temperature": 0.7, "language": "zh" },
+  "budget": { "perSeatTokenCap": 200000, "perTurnCallCap": 8, "onExceed": "degrade_to_deterministic" },
+  "knowledge": {
+    "factionsFile": "factions.json",
+    "unitsFile": "units.json",
+    "combatFile": "../../rules/combat.json",
+    "economyFile": "../../rules/economy.json",
+    "movementFile": "../../rules/movement.json",
+    "lawsFile": "../../rules/laws.json",
+    "alertsFile": "../../rules/alerts.json"
+  },
+  "victory": { "conquestRegionsRatio": 0.6 }
+}

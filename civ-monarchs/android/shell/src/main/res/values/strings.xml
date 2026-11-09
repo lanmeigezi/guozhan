@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">桌游合集</string>
+    <string name="home_title">桌游合集</string>
+    <string name="home_subtitle">多人在线 · 离线联机桌游</string>
+    <string name="btn_host">创建游戏（主机）</string>
+    <string name="btn_guest">加入游戏（玩家）</string>
+    <string name="btn_room">加入远程房间（局域网/远程）</string>
+    <string name="host_hint">你作为主机开启蓝牙服务，其他玩家搜索并加入。</string>
+    <string name="guest_hint">选择一台已配对的设备作为主机即可加入。</string>
+    <string name="room_hint">电脑端先运行房间服务器，玩家填其地址即可在局域网/互联网联机。</string>
+</resources>

@@ -1,0 +1,12 @@
+# deploy/Caddyfile —— 3 行反代：自动 HTTPS（Let's Encrypt），WS 透传免配置
+# 用法：把 your-domain.example.com 换成你的真实域名，docker compose up -d caddy
+your-domain.example.com {
+	reverse_proxy guozhan:8788
+}
+
+# 桌游合集（UNO / 斗地主 / 炸弹猫 / 骗子酒馆 / 抢21 / 国战 / 大富翁 / 狼人杀 Web）。
+# 推荐单独子域名；把 board.your-domain.example.com 换成真实域名并解析到本机。
+# 酒馆扩展的“桌游合集地址”填 https://board.your-domain.example.com/
+board.your-domain.example.com {
+	reverse_proxy board-games:8766
+}

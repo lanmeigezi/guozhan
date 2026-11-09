@@ -1,0 +1,14 @@
+{
+  "$comment": "移动规则。地形移动成本取自 combat.json 的 terrainModifier[t].mov（单一数据源，避免两处配置漂移）。",
+  "maxMovesPerUnitPerTurn": 1,
+  "allowPassThroughAllyTerritory": true,
+  "allowPassThroughNeutralTerritory": true,
+  "blockPassThroughEnemyTerritory": true,
+  "pathSearchMaxNodes": 400,
+  "$comment_retreat": "溃败方残兵撤退到最近的己方区域；无己方区域则就地消散",
+  "routRetreatToNearestOwned": true,
+  "routRetreatMaxDistance": 2,
+  "$comment_supply": "超出补给范围的部队每回合掉士气（预留，v1 未启用）",
+  "supplyEnabled": false,
+  "supplyRangeFromCapital": 6
+}

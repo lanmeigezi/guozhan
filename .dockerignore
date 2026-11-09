@@ -1,0 +1,22 @@
+# 构建上下文排除清单（越小越快，且防密钥/垃圾进镜像层）
+node_modules
+.git
+.gitignore
+.env
+.env.*
+data
+*.db
+*.db-wal
+*.db-shm
+docs
+tests
+tools
+extensions
+scripts
+deploy
+.qoder-credits
+*.md
+!README.md
+Dockerfile
+docker-compose.yaml
+.dockerignore

@@ -1,0 +1,10 @@
+{
+  "$comment": "开荒参数：空白地块有原住民（neutral garrison）与少量资金；派兵进入后用 settle_region 完成基建 Lv1 占领。civilianLaborPenalty=非军队人口对本地粮/金产出的惩罚：0=关闭，0.35=满驻军时本区产出最多 -35%。",
+  "settleGoldCost": 100,
+  "settleFoodCost": 80,
+  "lootGoldRatio": 0.18,
+  "nativeTroopRatio": 1,
+  "nativeManpowerRatio": 0.5,
+  "settledInfrastructure": 1,
+  "civilianLaborPenalty": 0.35
+}

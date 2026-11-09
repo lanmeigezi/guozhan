@@ -1,0 +1,41 @@
+{
+  "$comment": "随机地图的势力花名册。territories/capital/units 由生成器按种子填充，这里只固定 id/名称/颜色/性格/法令倾向，保证四个席位跨种子稳定；不要在这里写死领地。",
+  "factions": [
+    {
+      "id": "north",
+      "name": "北庭",
+      "ruler": "北庭侯",
+      "color": "#4a6fa5",
+      "personality": { "aggression": 0.75, "diplomacy": "calculating", "description": "北地骑射立国，善守河岸，伺机南渡。" },
+      "laws": ["junxian", "juntian"],
+      "taxRate": 0.3
+    },
+    {
+      "id": "east",
+      "name": "東海",
+      "ruler": "东海公",
+      "color": "#c9a227",
+      "personality": { "aggression": 0.55, "diplomacy": "mercantile", "description": "东岸商盟，港埠与盐铁并重，最重航路。" },
+      "laws": ["yantie"],
+      "taxRate": 0.28
+    },
+    {
+      "id": "west",
+      "name": "西川",
+      "ruler": "西川王",
+      "color": "#8b4a3b",
+      "personality": { "aggression": 0.6, "diplomacy": "defensive", "description": "西岸山国，凭坚城与山地步卒自守。" },
+      "laws": ["junxian"],
+      "taxRate": 0.3
+    },
+    {
+      "id": "south",
+      "name": "南越",
+      "ruler": "南越王",
+      "color": "#3e7b5a",
+      "personality": { "aggression": 0.8, "diplomacy": "raiding", "description": "水乡舟师之国，顺流而击，来去如风。" },
+      "laws": ["jingbing"],
+      "taxRate": 0.26
+    }
+  ]
+}

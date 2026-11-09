@@ -1,0 +1,50 @@
+/* 群星君主扩展样式：跟随酒馆暗色主题，容器用半透明深色，文字始终浅色 */
+.civm-settings { padding: 8px 4px 14px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.civm-settings h4 { margin: 4px 0 10px; font-size: 15px; }
+.civm-settings label { display: block; margin: 8px 0 3px; opacity: .85; font-size: 12px; }
+.civm-settings input[type="text"],
+.civm-settings input[type="password"] { width: 100%; box-sizing: border-box; }
+.civm-settings small { display: block; margin-top: 10px; opacity: .6; line-height: 1.5; }
+.civm-check { display: inline-flex !important; align-items: center; gap: 4px; margin: 0 0 0 8px !important; }
+
+.civm-toggle {
+  position: fixed; right: 18px; bottom: 18px; z-index: 10050;
+  padding: 8px 14px; border-radius: 20px; cursor: pointer;
+  background: #2c3a4b; color: #e8edf4; border: 1px solid #47596e;
+  box-shadow: 0 4px 14px rgba(0,0,0,.4); font-size: 13px;
+}
+.civm-toggle:hover { background: #3a4d63; }
+
+.civm-panel {
+  position: fixed; right: 18px; bottom: 62px; z-index: 10049;
+  width: min(520px, calc(100vw - 36px)); max-height: min(78vh, 760px);
+  overflow-y: auto; padding: 14px; box-sizing: border-box;
+  background: rgba(24, 30, 39, .96); color: #e6ecf3;
+  border: 1px solid #45566b; border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0,0,0,.55); font-size: 12.5px;
+}
+.civm-hidden { display: none; }
+.civm-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.civm-head strong { font-size: 15px; }
+.civm-status { opacity: .75; font-size: 11.5px; }
+.civm-section-title { margin: 12px 0 6px; padding-bottom: 3px; border-bottom: 1px solid rgba(255,255,255,.1); font-weight: 600; opacity: .9; }
+.civm-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+.civm-row select { flex: 1 1 120px; min-width: 90px; max-width: 100%; }
+.civm-row button { flex: 0 0 auto; font-size: 12px; padding: 4px 9px; }
+
+.civm-map { background: rgba(0,0,0,.18); border-radius: 8px; padding: 6px; }
+.civm-grid { display: grid; gap: 2px; }
+.civm-cell {
+  min-height: 26px; border-radius: 3px; color: #f4f7fb;
+  font-size: 10px; line-height: 26px; text-align: center;
+  white-space: nowrap; overflow: hidden; text-shadow: 0 1px 2px rgba(0,0,0,.7);
+}
+.civm-ranks { display: flex; flex-direction: column; gap: 3px; }
+.civm-rank { display: flex; align-items: center; gap: 7px; padding: 3px 5px; border-radius: 4px; background: rgba(255,255,255,.035); }
+.civm-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+.civm-rank-name { flex: 1 1 auto; }
+.civm-rank-val { opacity: .7; font-variant-numeric: tabular-nums; }
+
+.civm-chronicle, .civm-log { max-height: 150px; overflow-y: auto; background: rgba(0,0,0,.2); border-radius: 6px; padding: 6px; }
+.civm-chron-line, .civm-log-line { padding: 2px 0; line-height: 1.45; border-bottom: 1px solid rgba(255,255,255,.045); word-break: break-word; }
+.civm-log-line { opacity: .8; font-family: monospace; font-size: 11px; }

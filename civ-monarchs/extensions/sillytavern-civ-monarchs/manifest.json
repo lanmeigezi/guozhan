@@ -1,0 +1,10 @@
+{
+  "display_name": "群星君主 · 12 君主星际推演",
+  "loading_order": 100,
+  "js": "index.js",
+  "css": "panel.css",
+  "author": "civ-monarchs",
+  "version": "0.1.0",
+  "home_page": "",
+  "auto_update": false
+}

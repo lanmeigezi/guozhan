@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "note": "12 个君主席位。modelLabel 只是席位代号，不等于内置模型；把 model.model 填成真实模型 ID、model.adapter 改成 openai、并在环境变量里给出 apiKeyEnv 指定的 Key，该席位才会真正由外部大模型驱动。未配置的席位自动使用离线确定性君主，保证无 Key 也能开箱即玩。",
+  "defaults": {
+    "provider": "openai-compatible",
+    "baseUrl": "https://api.deepseek.com/v1",
+    "temperature": 0.8,
+    "maxTokens": 320,
+    "apiKeyEnvPrefix": "CIV_MODEL_"
+  },
+  "slots": [
+    { "id": "civ-01", "name": "大羲",   "monarch": "羲和氏",   "modelLabel": "DeepSeek", "color": "#e0524a", "persona": "重农稳进，厌恶冒险，相信积累胜过奇谋。", "model": { "adapter": "deterministic", "model": "", "apiKeyEnv": "CIV_MODEL_01_KEY" } },
+    { "id": "civ-02", "name": "玄溟",   "monarch": "溟渊君",   "modelLabel": "Qwen",     "color": "#4a86e0", "persona": "崇商重市，擅长以贸易换技术，外柔内韧。", "model": { "adapter": "deterministic", "model": "", "apiKeyEnv": "CIV_MODEL_02_KEY" } },
+    { "id": "civ-03", "name": "赤霄",   "monarch": "霄烈王",   "modelLabel": "GLM",      "color": "#d9713c", "persona": "尚武扩张，先手意识极强，容忍短期动荡。", "model": { "adapter": "deterministic", "model": "", "apiKeyEnv": "CIV_MODEL_03_KEY" } },
+    { "id": "civ-04", "name": "青岚",   "monarch": "岚山公",   "modelLabel": "Kimi",     "color": "#43a58a", "persona": "长于纵横，偏好结盟与条约，极少单独开战。", "model": { "adapter": "deterministic", "model": "", "apiKeyEnv": "CIV_MODEL_04_KEY" } },
+    { "id": "civ-05", "name": "金阙",   "monarch": "阙台女皇", "modelLabel": "Hunyuan",  "color": "#c9a13b", "persona": "制度至上，专注发展度与秩序，善于长线经营。", "model": { "adapter": "deterministic", "model": "", "apiKeyEnv": "CIV_MODEL_05_KEY" } },
+    { "id": "civ-06", "name": "朔北",   "monarch": "北庭可汗", "modelLabel": "Doubao",   "color": "#8f7bc4", "persona": "机动优先，见缝插针，擅长在乱局中抢地。", "model": { "adapter": "deterministic", "model": "", "apiKeyEnv": "CIV_MODEL_06_KEY" } },
+    { "id": "civ-07", "name": "沧澜",   "monarch": "澜汐领主", "modelLabel": "MiniMax",  "color": "#3f9fbf", "persona": "海洋与能源本位，后期押注殖民与航行。", "model": { "adapter": "deterministic", "model": "", "apiKeyEnv": "CIV_MODEL_07_KEY" } },
+    { "id": "civ-08", "name": "墨翟",   "monarch": "墨钜子",   "modelLabel": "Step",     "color": "#6b7b8c", "persona": "技术官僚，一切决策以科技阈值倒推。", "model": { "adapter": "deterministic", "model": "", "apiKeyEnv": "CIV_MODEL_08_KEY" } },
+    { "id": "civ-09", "name": "白榆",   "monarch": "榆下议长", "modelLabel": "Claude",   "color": "#c4c9d4", "persona": "审慎保守，重视民生与稳定，反对孤注一掷。", "model": { "adapter": "deterministic", "model": "", "apiKeyEnv": "CIV_MODEL_09_KEY" } },
+    { "id": "civ-10", "name": "曜灵",   "monarch": "曜日法老", "modelLabel": "GPT",      "color": "#e0a53c", "persona": "宏大叙事型，追求奇观与时代跃迁的戏剧性。", "model": { "adapter": "deterministic", "model": "", "apiKeyEnv": "CIV_MODEL_10_KEY" } },
+    { "id": "civ-11", "name": "幽篁",   "monarch": "篁隐君",   "modelLabel": "Gemini",   "color": "#5f9e63", "persona": "隐忍待机，前期低调储能，后期突然发力。", "model": { "adapter": "deterministic", "model": "", "apiKeyEnv": "CIV_MODEL_11_KEY" } },
+    { "id": "civ-12", "name": "星槎",   "monarch": "槎客执政", "modelLabel": "Grok",     "color": "#b45fa8", "persona": "激进冒险，愿意为星际目标牺牲一切短期指标。", "model": { "adapter": "deterministic", "model": "", "apiKeyEnv": "CIV_MODEL_12_KEY" } }
+  ]
+}

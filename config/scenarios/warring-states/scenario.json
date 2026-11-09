@@ -1,0 +1,92 @@
+{
+  "$comment": "剧本：战国七雄。★剧本发现走目录扫描而非白名单（Histrategy 的 _validate_scenario_id 硬编码是它的坑，我们不学）。7 势力恰好演示分级 LLM：3 个 majorAi 走 LLM，4 个 minorAi 走启发式不调 LLM。",
+  "meta": {
+    "id": "warring-states",
+    "name": "戰國七雄",
+    "description": "周室衰微，七雄並立。合縱連橫，兵連禍結。",
+    "startTurn": 1,
+    "maxTurns": 40
+  },
+  "engine": {
+    "moduleOrder": [
+      "economy",
+      "movement",
+      "combat"
+    ],
+    "behaviorFingerprint": 1
+  },
+  "timeout": {
+    "human": 300,
+    "ai": 120
+  },
+  "seats": {
+    "humanCapable": [
+      "qin",
+      "zhao",
+      "chu",
+      "qi"
+    ],
+    "majorAi": [
+      "qin",
+      "zhao",
+      "chu"
+    ],
+    "minorAi": [
+      "wei",
+      "han",
+      "yan",
+      "qi"
+    ],
+    "spectatorSlots": 4
+  },
+  "$comment_milestones": "★硬性回合里程碑，防 OpenRA-RL 的'只种田不打仗'——它给 Qwen3-32B 的软性提示 'Build economy early, army later' 被执行成了'永远经济'，5 局零交锋。软约束对小模型无效，必须给可校验的硬指标。",
+  "milestones": [
+    {
+      "turn": 6,
+      "require": {
+        "offensiveArmies": 2
+      },
+      "message": "第 6 回合前必须编成至少 2 支可进攻的野战军"
+    },
+    {
+      "turn": 14,
+      "require": {
+        "attacksLaunched": 1
+      },
+      "message": "第 14 回合前必须发起至少 1 次进攻"
+    },
+    {
+      "turn": 24,
+      "require": {
+        "regionsCaptured": 1
+      },
+      "message": "第 24 回合前必须夺取至少 1 个敌方区域"
+    }
+  ],
+  "llm": {
+    "model": "deepseek-chat",
+    "advisorMaxTokens": 2048,
+    "narrativeMaxTokens": 1024,
+    "intentMaxTokens": 512,
+    "temperature": 0.7,
+    "language": "zh"
+  },
+  "budget": {
+    "perSeatTokenCap": 200000,
+    "perTurnCallCap": 8,
+    "onExceed": "degrade_to_deterministic"
+  },
+  "knowledge": {
+    "mapFile": "../../map/regions.json",
+    "factionsFile": "factions.json",
+    "unitsFile": "../../rules/units.json",
+    "combatFile": "../../rules/combat.json",
+    "economyFile": "../../rules/economy.json",
+    "movementFile": "../../rules/movement.json",
+    "alertsFile": "../../rules/alerts.json"
+  },
+  "victory": {
+    "conquestRegionsRatio": 0.6,
+    "$comment": "占领全图 60% 区域即征服胜利；否则到 maxTurns 按多维评分判定"
+  }
+}

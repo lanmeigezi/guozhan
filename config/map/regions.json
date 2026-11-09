@@ -1,0 +1,214 @@
+{
+  "$comment": "战国地图：19 个区域的邻接图。★邻接关系必须对称（a 的表里有 b ⇒ b 的表里有 a），由 tests/deterministic/config.test.ts 强制。adjacency 数组必须字典序排序，否则 JSON 顺序变化会破坏确定性。",
+  "regions": [
+    {
+      "id": "guanzhong",
+      "name": "關中",
+      "terrain": "plains",
+      "adjacency": ["hanzhong", "hedong", "longxi", "luoyang"],
+      "baseFood": 900,
+      "baseGold": 700,
+      "baseManpower": 90000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "longxi",
+      "name": "隴西",
+      "terrain": "hills",
+      "adjacency": ["bashu", "guanzhong"],
+      "baseFood": 400,
+      "baseGold": 300,
+      "baseManpower": 40000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "bashu",
+      "name": "巴蜀",
+      "terrain": "forest",
+      "adjacency": ["hanzhong", "longxi", "ying"],
+      "baseFood": 1100,
+      "baseGold": 500,
+      "baseManpower": 70000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "hanzhong",
+      "name": "漢中",
+      "terrain": "hills",
+      "adjacency": ["bashu", "guanzhong"],
+      "baseFood": 600,
+      "baseGold": 250,
+      "baseManpower": 35000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "handan",
+      "name": "邯鄲",
+      "terrain": "plains",
+      "adjacency": ["daliang", "jinyang", "linzi"],
+      "baseFood": 850,
+      "baseGold": 650,
+      "baseManpower": 85000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "jinyang",
+      "name": "晉陽",
+      "terrain": "hills",
+      "adjacency": ["dai", "handan", "hedong", "shangdang"],
+      "baseFood": 600,
+      "baseGold": 400,
+      "baseManpower": 55000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "dai",
+      "name": "代郡",
+      "terrain": "mountain",
+      "adjacency": ["ji", "jinyang"],
+      "baseFood": 300,
+      "baseGold": 200,
+      "baseManpower": 30000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "daliang",
+      "name": "大梁",
+      "terrain": "plains",
+      "adjacency": ["handan", "hedong", "linzi", "luoyang", "xinzheng"],
+      "baseFood": 950,
+      "baseGold": 800,
+      "baseManpower": 80000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "hedong",
+      "name": "河東",
+      "terrain": "hills",
+      "adjacency": ["daliang", "guanzhong", "jinyang", "luoyang"],
+      "baseFood": 650,
+      "baseGold": 450,
+      "baseManpower": 50000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "xinzheng",
+      "name": "新鄭",
+      "terrain": "plains",
+      "adjacency": ["daliang", "luoyang", "nanyang", "shangdang"],
+      "baseFood": 600,
+      "baseGold": 550,
+      "baseManpower": 45000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "shangdang",
+      "name": "上黨",
+      "terrain": "mountain",
+      "adjacency": ["jinyang", "luoyang", "xinzheng"],
+      "baseFood": 350,
+      "baseGold": 250,
+      "baseManpower": 28000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "luoyang",
+      "name": "洛陽",
+      "terrain": "urban",
+      "adjacency": ["daliang", "guanzhong", "hedong", "nanyang", "shangdang", "xinzheng"],
+      "baseFood": 700,
+      "baseGold": 900,
+      "baseManpower": 40000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "linzi",
+      "name": "臨淄",
+      "terrain": "plains",
+      "adjacency": ["daliang", "handan", "langya"],
+      "baseFood": 1000,
+      "baseGold": 950,
+      "baseManpower": 75000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "langya",
+      "name": "琅琊",
+      "terrain": "forest",
+      "adjacency": ["jiangdong", "linzi"],
+      "baseFood": 500,
+      "baseGold": 450,
+      "baseManpower": 38000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "ying",
+      "name": "郢都",
+      "terrain": "forest",
+      "adjacency": ["bashu", "jiangdong", "nanyang"],
+      "baseFood": 900,
+      "baseGold": 600,
+      "baseManpower": 88000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "nanyang",
+      "name": "南陽",
+      "terrain": "plains",
+      "adjacency": ["jiangdong", "luoyang", "xinzheng", "ying"],
+      "baseFood": 750,
+      "baseGold": 500,
+      "baseManpower": 60000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "jiangdong",
+      "name": "江東",
+      "terrain": "river",
+      "adjacency": ["langya", "nanyang", "ying"],
+      "baseFood": 800,
+      "baseGold": 550,
+      "baseManpower": 52000,
+      "strategic": false,
+      "passable": true
+    },
+    {
+      "id": "ji",
+      "name": "薊城",
+      "terrain": "plains",
+      "adjacency": ["dai", "liaodong"],
+      "baseFood": 550,
+      "baseGold": 350,
+      "baseManpower": 48000,
+      "strategic": true,
+      "passable": true
+    },
+    {
+      "id": "liaodong",
+      "name": "遼東",
+      "terrain": "mountain",
+      "adjacency": ["ji"],
+      "baseFood": 250,
+      "baseGold": 180,
+      "baseManpower": 22000,
+      "strategic": false,
+      "passable": true
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+# 统一换行符为 LF（跨平台协作；检出时按平台自动转换，入库一律 LF）
+* text=auto eol=lf
+
+# 锁定文件不参与 diff / merge
+package-lock.json -diff
+pnpm-lock.yaml -diff
+yarn.lock -diff
+
+# 二进制资源（即便将来误加入也不做文本转换）
+*.apk binary
+*.aab binary
+*.exe binary
+*.dll binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary

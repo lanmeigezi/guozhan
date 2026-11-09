@@ -1,0 +1,117 @@
+{
+  "$comment": "开荒模式自定义地图布局：半径 2 的正六边形蜜格（19 区，无空洞）；四个首都固定在四角，四个角格度数相同；坐标只决定画在哪，规则邻接仍以 regions.json 为准。",
+  "canvas": {
+    "width": 536,
+    "height": 496
+  },
+  "hexSize": 60,
+  "regions": [
+    {
+      "id": "bashu",
+      "x": 163.88,
+      "y": 248
+    },
+    {
+      "id": "dai",
+      "x": 423.69,
+      "y": 158
+    },
+    {
+      "id": "daliang",
+      "x": 215.85,
+      "y": 158
+    },
+    {
+      "id": "guanzhong",
+      "x": 163.88,
+      "y": 68
+    },
+    {
+      "id": "handan",
+      "x": 319.77,
+      "y": 158
+    },
+    {
+      "id": "hanzhong",
+      "x": 111.92,
+      "y": 158
+    },
+    {
+      "id": "hedong",
+      "x": 267.81,
+      "y": 68
+    },
+    {
+      "id": "ji",
+      "x": 475.65,
+      "y": 248
+    },
+    {
+      "id": "jiangdong",
+      "x": 319.77,
+      "y": 338
+    },
+    {
+      "id": "jinyang",
+      "x": 371.73,
+      "y": 68
+    },
+    {
+      "id": "langya",
+      "x": 371.73,
+      "y": 248
+    },
+    {
+      "id": "liaodong",
+      "x": 423.69,
+      "y": 338
+    },
+    {
+      "id": "linzi",
+      "x": 267.81,
+      "y": 248
+    },
+    {
+      "id": "longxi",
+      "x": 59.96,
+      "y": 248
+    },
+    {
+      "id": "luoyang",
+      "x": 215.85,
+      "y": 338
+    },
+    {
+      "id": "nanyang",
+      "x": 267.81,
+      "y": 428
+    },
+    {
+      "id": "shangdang",
+      "x": 111.92,
+      "y": 338
+    },
+    {
+      "id": "xinzheng",
+      "x": 163.88,
+      "y": 428
+    },
+    {
+      "id": "ying",
+      "x": 371.73,
+      "y": 428
+    }
+  ],
+  "factionColors": {
+    "red": "#c95b4d",
+    "blue": "#4d78c9",
+    "green": "#4f9a68",
+    "gold": "#c9a84f"
+  },
+  "capitals": {
+    "red": "guanzhong",
+    "blue": "jinyang",
+    "green": "xinzheng",
+    "gold": "ying"
+  }
+}

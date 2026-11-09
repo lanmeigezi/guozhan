@@ -1,0 +1,41 @@
+{
+  "name": "guozhan",
+  "version": "0.9.9",
+  "private": true,
+  "type": "module",
+  "description": "AI 辅助国战模拟 —— 确定性规则核心 + LLM 战略层，为 SillyTavern 提供独立游戏服务",
+  "engines": {
+    "node": ">=24"
+  },
+  "$comment_engines": "Node 24+：node:sqlite 免 --experimental-sqlite 标志（22.5-23.3 需要该标志）。better-sqlite3 已弃用——它在 Node 26 无预编译二进制、回落源码编译又需 VS Build Tools，本机实测装不上；node:sqlite 零安装零编译，Docker 镜像也少一个 build 阶段。",
+  "scripts": {
+    "build": "tsup && node scripts/copy-assets.mjs",
+    "build:uno": "node --experimental-strip-types scripts/build-uno-engine.ts",
+    "start:board": "node scripts/start-board-games.mjs",
+    "dev": "tsx watch src/server/main.ts",
+    "start": "node --enable-source-maps dist/main.js",
+    "web": "node scripts/serve-web.mjs",
+    "typecheck": "tsc --noEmit",
+    "test:core": "node --experimental-strip-types --test tests/deterministic/rng.test.ts",
+    "test": "node --experimental-strip-types --test \"tests/deterministic/**/*.test.ts\"",
+    "test:llm": "node --experimental-strip-types --test \"tests/llm-e2e/**/*.test.ts\"",
+    "arch-check": "node --experimental-strip-types tools/arch-check.ts",
+    "validate-config": "node --experimental-strip-types tools/validate-config.ts",
+    "verify-room": "node --experimental-strip-types tools/verify-room.ts",
+    "smoke": "node scripts/smoke.mjs",
+    "measure": "node scripts/measure-footprint.mjs",
+    "verify": "npm run arch-check && npm run typecheck && npm run validate-config && npm run test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.2",
+    "ws": "^8.18.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@types/ws": "^8.5.13",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

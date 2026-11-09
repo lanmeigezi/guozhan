@@ -1,0 +1,26 @@
+{
+  "$comment": "19 区六角棋盘布局（纯展示层，不参与任何规则结算）。x/y 是六角格中心像素坐标，画布 1200×820，hexSize=58 为外接圆半径。所有区域必须与 regions.json 一一对应，任意两格中心距 ≥ 2*hexSize+4，否则六角会重叠 —— 由 tests/deterministic/map-layout.test.ts 强制。邻接关系不靠'格边相接'表达（本作是区域图不是蜂窝地图），而是画成道路；因此坐标只决定视觉位置，不构成第二份邻接真相。",
+  "canvas": { "width": 1200, "height": 820 },
+  "hexSize": 58,
+  "regions": [
+    { "id": "bashu", "x": 245, "y": 685 },
+    { "id": "dai", "x": 720, "y": 95 },
+    { "id": "daliang", "x": 760, "y": 435 },
+    { "id": "guanzhong", "x": 345, "y": 360 },
+    { "id": "handan", "x": 850, "y": 240 },
+    { "id": "hanzhong", "x": 310, "y": 505 },
+    { "id": "hedong", "x": 505, "y": 335 },
+    { "id": "ji", "x": 870, "y": 95 },
+    { "id": "jiangdong", "x": 805, "y": 645 },
+    { "id": "jinyang", "x": 635, "y": 205 },
+    { "id": "langya", "x": 1015, "y": 440 },
+    { "id": "liaodong", "x": 1020, "y": 95 },
+    { "id": "linzi", "x": 1040, "y": 245 },
+    { "id": "longxi", "x": 150, "y": 400 },
+    { "id": "luoyang", "x": 520, "y": 460 },
+    { "id": "nanyang", "x": 505, "y": 625 },
+    { "id": "shangdang", "x": 700, "y": 315 },
+    { "id": "xinzheng", "x": 650, "y": 545 },
+    { "id": "ying", "x": 445, "y": 735 }
+  ]
+}
