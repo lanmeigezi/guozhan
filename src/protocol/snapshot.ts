@@ -58,6 +58,19 @@ export const ProjectedRegionSchema = z
       })
       .strict()
       .optional(),
+    /**
+     * 该地块的禁叛冷却（起义爆发后 N 回合内不再自动起义）。
+     * 与 rebellion 分开：重占/归附把 rebellion 清空后冷却仍然有效。
+     */
+    rebellionCooldown: z
+      .object({
+        lastRebellionTurn: z.number().int(),
+        /** 含当前回合还剩多少个回合不能再起义 */
+        remainingTurns: z.number().int().min(0),
+        totalTurns: z.number().int().min(0),
+      })
+      .strict()
+      .optional(),
     /** 开荒地块：未占领且剧本启用 frontier 时下发 */
     frontier: z
       .object({

@@ -29,6 +29,7 @@ export type StateSlice =
   | 'regions.foodStock'
   | 'regions.unrest'
   | 'regions.rebellion'
+  | 'regions.lastRebellionTurn'
   | 'factions.gold'
   | 'factions.food'
   | 'factions.morale'
@@ -62,6 +63,11 @@ export type Mutation =
   | { readonly op: 'add_faction_gold'; readonly factionId: FactionId; readonly delta: number; readonly reason: string }
   | { readonly op: 'add_faction_food'; readonly factionId: FactionId; readonly delta: number; readonly reason: string }
   | { readonly op: 'add_faction_morale'; readonly factionId: FactionId; readonly delta: number; readonly reason: string }
+  /**
+   * 战争胜利民心：只有「本场战争的发动方」走这条，实际发放量由核心按
+   * relations[key].warMoraleRemaining 钳制（累计 ≤ 宣战损失），并从账本扣除。
+   */
+  | { readonly op: 'grant_war_victory_morale'; readonly factionId: FactionId; readonly opponent: FactionId; readonly delta: number; readonly reason: string }
   | { readonly op: 'add_faction_manpower'; readonly factionId: FactionId; readonly delta: number; readonly reason: string }
   | { readonly op: 'set_faction_tax_rate'; readonly factionId: FactionId; readonly rate: number }
   | { readonly op: 'set_faction_laws'; readonly factionId: FactionId; readonly laws: readonly string[] }
@@ -73,9 +79,16 @@ export type Mutation =
   | { readonly op: 'spawn_unit'; readonly unitId: UnitId; readonly ownerId: FactionId; readonly regionId: RegionId; readonly typeId: string; readonly troops: number; readonly movedThisTurn?: boolean; readonly title?: string; readonly garrisonOnly?: boolean }
   | { readonly op: 'set_unit_garrison'; readonly unitId: UnitId; readonly garrisonOnly: boolean; readonly title?: string | null }
   | { readonly op: 'destroy_unit'; readonly unitId: UnitId; readonly reason: string }
-  | { readonly op: 'set_relation'; readonly a: FactionId; readonly b: FactionId; readonly kind: string }
+  /** initiator：进入 war 时的发动方，核心据此记宣战民心账；离开 war 时清空账本 */
+  | { readonly op: 'set_relation'; readonly a: FactionId; readonly b: FactionId; readonly kind: string; readonly initiator?: FactionId }
   | { readonly op: 'add_relation_grudge'; readonly a: FactionId; readonly b: FactionId; readonly delta: number; readonly reason: string }
-  | { readonly op: 'set_region_rebellion'; readonly regionId: RegionId; readonly rebellion: RebellionState | null };
+  | {
+      readonly op: 'set_region_rebellion';
+      readonly regionId: RegionId;
+      readonly rebellion: RebellionState | null;
+      /** 只在真正爆发起义时传：把冷却起点落库（rebellion 被清空后仍保留） */
+      readonly lastRebellionTurn?: number;
+    };
 
 /** 逐字段增量归因（Histrategy turn_delta：这个数为什么变成这样） */
 export interface DeltaRecord {

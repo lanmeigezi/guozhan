@@ -15,7 +15,7 @@
  *   均为「每 1000 兵」的单价。兵力在本游戏是万级，用"每千兵单价"避免出现 0.0x 的碎数。
  */
 import type { FactionId, RegionId, UnitTypeId, WorldConfig } from '../state.ts';
-import { civilianPopulation, regionPopulation, regionsOf, terrainTraits, totalPopulation, unitsIn } from '../state.ts';
+import { civilianPopulation, isRebellionOnCooldown, regionPopulation, regionsOf, terrainTraits, totalPopulation, unitsIn } from '../state.ts';
 import { amplifiedUnrest, unrestOutputFactor } from '../unrest.ts';
 import type { AcceptedOrder, ResolveContext, RuleModule, StateSlice } from '../module.ts';
 
@@ -284,8 +284,13 @@ export const economyModule: RuleModule = {
         if (!st) continue;
         // ★启用起义的剧本：普通区域一旦到 100 就不再自然衰减，保证同一回合末能触发起义；
         //   已归附的起义区仍正常衰减，才能靠治理把动乱降到恢复线。
+        //   冷却期内起义被压住，若继续把动乱钉死在 100 就永远无法恢复 ——
+        //   因此冷却期按常规衰减，让治理真正能把地块拉回来。
+        const onCooldown = world.rebellion
+          ? isRebellionOnCooldown(st, ctx.turn, world.rebellion.rebellionCooldownTurns)
+          : false;
         const rawDelta = taxUnrest + laws.unrestPerTurn - e.unrestDecayPerTurn;
-        const delta = world.rebellion && !st.rebellion && st.unrest >= 100
+        const delta = world.rebellion && !st.rebellion && st.unrest >= 100 && !onCooldown
           ? Math.max(0, taxUnrest + laws.unrestPerTurn)
           : rawDelta;
         if (delta !== 0) ctx.mutate({ op: 'add_region_unrest', regionId: rid, delta });

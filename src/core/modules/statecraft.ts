@@ -97,7 +97,15 @@ function handleDiplomacy(ctx: ResolveContext, order: AcceptedOrder, cmd: Diploma
     ctx.reject(order, 'MALFORMED_PAYLOAD', `与 ${target.name} 的关系已经是 ${next}`);
     return;
   }
-  ctx.mutate({ op: 'set_relation', a: fid, b: cmd.to, kind: next });
+  // ★进入 war 时把发动方交给核心：核心据此记「宣战民心损失」与战胜回补额度。
+  //   未启用 governance.warMorale 的剧本，核心会直接忽略这个字段（行为不变）。
+  ctx.mutate({
+    op: 'set_relation',
+    a: fid,
+    b: cmd.to,
+    kind: next,
+    ...(next === 'war' ? { initiator: fid } : {}),
+  });
   // ★潜在恨意：宣战与毁约是会被记住的。双方外交政策一起转冷。
   if (ctx.world.capabilities?.grudge === true) {
     const delta = cmd.action === 'declare_war'

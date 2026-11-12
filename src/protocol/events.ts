@@ -317,6 +317,8 @@ export const DomainEventSchema = z.discriminatedUnion('type', [
     original: z.string(),
     cause: z.enum(['unrest', 'claimed_conscription']),
     rebelTroops: z.number().int(),
+    /** 该地块本次起义后的禁叛回合数（旧事件回放缺省） */
+    cooldownTurns: z.number().int().min(0).optional(),
     claimedBy: z.string().optional(),
   }).strict(),
 

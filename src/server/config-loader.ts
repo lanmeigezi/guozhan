@@ -194,6 +194,20 @@ function parseGovernance(raw: any, label: string): GovernanceParams {
       throw new Error(`${label}.unrestEffects.${key} 必须在 [0,1]，实得 ${String(value)}`);
     }
   }
+  // ★可选：战争民心账本。共享 governance.json 不写这一节 ⇒ 旧治理剧本行为逐字不变。
+  let warMorale: GovernanceParams['warMorale'];
+  if (raw.warMorale !== undefined) {
+    const wm = raw.warMorale;
+    const declarationCost = Number(wm?.declarationCost);
+    const victoryGainCap = Number(wm?.victoryGainCap);
+    for (const [key, value] of Object.entries({ declarationCost, victoryGainCap })) {
+      if (!Number.isFinite(value) || value < 0) {
+        throw new Error(`${label}.warMorale.${key} 必须是非负有限数，实得 ${String(value)}`);
+      }
+    }
+    if (declarationCost <= 0) throw new Error(`${label}.warMorale.declarationCost 必须 > 0`);
+    warMorale = { declarationCost: Math.round(declarationCost), victoryGainCap: Math.round(victoryGainCap) };
+  }
   const governance: GovernanceParams = {
     infrastructure: {
       maxLevel: maxLevel as 1 | 2 | 3 | 4,
@@ -203,6 +217,7 @@ function parseGovernance(raw: any, label: string): GovernanceParams {
     },
     lowMoraleUnrest,
     unrestEffects,
+    ...(warMorale !== undefined ? { warMorale } : {}),
   };
   for (const key of ['moralePointsPerTurnPoint', 'moraleOnBuild'] as const) {
     const value = governance.infrastructure[key];
@@ -325,6 +340,11 @@ function parseRebellion(raw: any, label: string): RebellionParams {
   if (values['claimedConscriptionTurns']! < 1 || !Number.isInteger(values['claimedConscriptionTurns'])) {
     throw new Error(`${label}.claimedConscriptionTurns 必须 ≥1 的整数`);
   }
+  // 旧 rebellion 配置没有禁叛回合数：默认 15，保证不会因新增字段而拒绝老档配置
+  const cooldown = Number(raw.rebellionCooldownTurns ?? 15);
+  if (!Number.isInteger(cooldown) || cooldown < 1) {
+    throw new Error(`${label}.rebellionCooldownTurns 必须 ≥1 的整数，实得 ${String(raw.rebellionCooldownTurns)}`);
+  }
   const parsed: RebellionParams = {
     rebelUnitType,
     levyRatio: values['levyRatio']!,
@@ -336,6 +356,7 @@ function parseRebellion(raw: any, label: string): RebellionParams {
     claimedConscriptionTurns: Math.round(values['claimedConscriptionTurns']!),
     normalizeUnrest: Math.round(values['normalizeUnrest']!),
     originalReoccupyUnrest: Math.round(values['originalReoccupyUnrest']!),
+    rebellionCooldownTurns: cooldown,
   };
   assertNoHoles(parsed, label);
   return parsed;
@@ -1089,6 +1110,7 @@ export function loadScenario(scenarioId: string, rootSeed?: string, configRoot =
         }
       : null,
     unrestEffects: governance ? { ...governance.unrestEffects } : null,
+    warMorale: governance?.warMorale ? { ...governance.warMorale } : null,
   };
   const terrainHelp = Object.keys(world.combat.terrainModifier).sort().map((id) => {
     const traits = terrainTraits(id);

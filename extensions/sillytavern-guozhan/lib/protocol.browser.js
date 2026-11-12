@@ -2,7 +2,7 @@
  * protocol.browser.js —— ★生成文件，勿手改。
  * 单一真源：src/protocol/*.ts；生成器：tools/build-protocol-bundle.ts
  * 模式：full（full=zod schema 真身可运行时校验；fallback=纯数据表，无校验能力）
- * 源码指纹：sha256:6d09cb67bc00b521167a392e52029cf52fd2c2a26e84e709432bed35a90687e5
+ * 源码指纹：sha256:f211a2e2cca9b0aca30fe9872757f92ab4fdb9a585ff364ddafc250437f5ce87
  * 同步闸门：tests/deterministic/deploy.test.ts 会核对产物与源码一致。
  */
 var __defProp = Object.defineProperty;
@@ -4392,6 +4392,8 @@ var DomainEventSchema = external_exports.discriminatedUnion("type", [
     original: external_exports.string(),
     cause: external_exports.enum(["unrest", "claimed_conscription"]),
     rebelTroops: external_exports.number().int(),
+    /** 该地块本次起义后的禁叛回合数（旧事件回放缺省） */
+    cooldownTurns: external_exports.number().int().min(0).optional(),
     claimedBy: external_exports.string().optional()
   }).strict(),
   /** 起义区被更高民心国家宣称归附 */
@@ -4662,6 +4664,16 @@ var ProjectedRegionSchema = external_exports.object({
     /** 归附后多少回合内征兵会再次起义（方便 UI 显示窗口） */
     conscriptionTurns: external_exports.number().int().optional()
   }).strict().optional(),
+  /**
+   * 该地块的禁叛冷却（起义爆发后 N 回合内不再自动起义）。
+   * 与 rebellion 分开：重占/归附把 rebellion 清空后冷却仍然有效。
+   */
+  rebellionCooldown: external_exports.object({
+    lastRebellionTurn: external_exports.number().int(),
+    /** 含当前回合还剩多少个回合不能再起义 */
+    remainingTurns: external_exports.number().int().min(0),
+    totalTurns: external_exports.number().int().min(0)
+  }).strict().optional(),
   /** 开荒地块：未占领且剧本启用 frontier 时下发 */
   frontier: external_exports.object({
     natives: external_exports.number().int(),
@@ -4924,4 +4936,4 @@ export {
   UnitIdSchema
 };
 
-export const PROTOCOL_SOURCE_SHA256 = "6d09cb67bc00b521167a392e52029cf52fd2c2a26e84e709432bed35a90687e5";
+export const PROTOCOL_SOURCE_SHA256 = "f211a2e2cca9b0aca30fe9872757f92ab4fdb9a585ff364ddafc250437f5ce87";

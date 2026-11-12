@@ -14,7 +14,7 @@
  *   3. 观战端拿全知视图，但**没有 legalActions 也没有 budget** —— 观战不能下命令。
  */
 import type { FactionId, GameState, RegionId, SeatId, WorldConfig } from '../../core/state.ts';
-import { getGrudge, rebelTroopsInRegion, regionCivilianPopulation, regionPopulation, relationKey, totalTroops, tradePolicyBetween, unitsIn } from '../../core/state.ts';
+import { getGrudge, rebelTroopsInRegion, rebellionCooldownRemaining, regionCivilianPopulation, regionPopulation, relationKey, totalTroops, tradePolicyBetween, unitsIn } from '../../core/state.ts';
 import {
   armyTier,
   buildMapText,
@@ -123,6 +123,17 @@ export function buildSnapshot(opts: SnapshotOptions): Snapshot {
           rebelTroops: rebelTroopsInRegion(state, regionId),
           ...(world.rebellion ? { conscriptionTurns: world.rebellion.claimedConscriptionTurns } : {}),
         };
+      }
+      // ★禁叛冷却：起义结束后（rebellion 已清空）仍要显示在右侧区域详情里
+      if (world.rebellion && rs.lastRebellionTurn !== undefined) {
+        const remaining = rebellionCooldownRemaining(rs, state.turn, world.rebellion.rebellionCooldownTurns);
+        if (remaining > 0) {
+          out.rebellionCooldown = {
+            lastRebellionTurn: rs.lastRebellionTurn,
+            remainingTurns: remaining,
+            totalTurns: world.rebellion.rebellionCooldownTurns,
+          };
+        }
       }
       if (!rs.rebellion && rs.owner === null && world.frontier && def) {
         const natives = unitsIn(state, regionId, 'neutral').reduce((sum, u) => sum + u.troops, 0);

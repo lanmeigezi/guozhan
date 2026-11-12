@@ -1,3 +1,11 @@
+# guozhan 规则更新 · 叛乱冷却与战争民心 · 2026-11-13
+
+源码级规则调整（未重出 APK / 发布包；只改 git 仓库源码）。仅 grand-front 生效，旧剧本行为逐字不变。
+
+- **叛乱冷却**：地块起义后 15 回合内不再因动乱满 100 自动起义（起点 `RegionState.lastRebellionTurn` 落库，重占/归附后仍有效）；唯一例外是「归附后立即征兵」的再起义，且每次爆发重置冷却。冷却期内动乱可正常回落。右栏「区域详情」并列显示「叛乱冷却还剩 N 回合」与「能否征兵」。
+- **战争民心**：宣战 / 进攻自动开战只扣**发动方** 5 民心并记账；该场战争里发动方的攻取 +5 / 收复故土 +6 / 守住 +3 累计最多回补 5，不能靠打仗刷民心。被攻击方在丢失地块前不因交战掉民心（失守 −8 仍是失地代价）。守方 +3、中立区 +5、旧剧本全部保持原行为。
+- **验收**：新增 9 条回归 `tests/deterministic/war-morale-rebellion-cooldown.test.ts`；`npm run verify`（arch-check + typecheck + validate-config + 全量测试）、`npm run build`、`npm run smoke` 全绿；协议副本 `extensions/sillytavern-guozhan/lib/protocol.browser.js` 已重生成。规则细节见 `docs/05-外交恨意与鬻奴令.md` §9。
+
 # 桌游合集 APK 1.26 · 群星君主离线单机 · guozhan 0.9.9 · 2026-11-08（收尾）
 
 把 `civ-monarchs`（群星君主）按 `civ-monarchs/HANDOFF.md` §8.1.1 路径 B 做进桌游合集 APK，作为首屏「群星君主 · 单机」按钮（共 9 款）。**飞行模式下完整可玩一局**，LLM 由用户自接、可选增强。本轮收尾两件事：**P1** 重建 guozhan 服务端 0.9.9（0.9.8 发布包内的预编译 `dist` 过期，缺「士气大振 / 收复故土」、残留金矿钳制）；**P2** 修群星君主终局按钮后重出 APK 1.26。

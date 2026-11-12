@@ -310,10 +310,33 @@ export interface UnrestEffectsParams {
 }
 
 /** 可选治理规则。未声明 governance 的旧剧本行为与旧版本完全一致。 */
+/**
+ * 战争民心账本（可选；未声明 ⇒ 完全不改变旧剧本的民心行为）。
+ *
+ *   · 宣战/进攻自动开战：只对**发动方**扣 declarationCost 点民心；
+ *   · 该场战争里发动方的战胜增益累计不得超过 victoryGainCap（默认与损失相等），
+ *     所以「打赢仗」最多把宣战损失补回来，不能靠战争刷民心；
+ *   · 被攻击方不付这笔钱，在丢失地块前不因这场战争掉民心
+ *     （失守 −8 是失地代价，与「是否交战」无关）。
+ */
+export interface WarMoraleParams {
+  /** 发动战争时一次性扣除的全国民心 */
+  readonly declarationCost: number;
+  /** 本场战争里发动方累计可回补的民心上限 */
+  readonly victoryGainCap: number;
+}
+
 export interface GovernanceParams {
   readonly infrastructure: InfrastructureParams;
   readonly lowMoraleUnrest: LowMoraleUnrestParams;
   readonly unrestEffects: UnrestEffectsParams;
+  /** 旧剧本/共享 governance 配置没有这一节 ⇒ 战争民心机制整体关闭 */
+  readonly warMorale?: WarMoraleParams;
+}
+
+/** 取战争民心参数；未启用返回 null（单一真源，模块与核心共用） */
+export function warMoraleParams(world: WorldConfig): WarMoraleParams | null {
+  return world.governance?.warMorale ?? null;
 }
 
 /**
@@ -386,6 +409,8 @@ export interface RebellionParams {
   readonly normalizeUnrest: number;
   /** 原主重新占领后设置的动乱值 */
   readonly originalReoccupyUnrest: number;
+  /** 地块起义后多少回合内不得再次起义（例外：归附后立即征兵触发的再起义） */
+  readonly rebellionCooldownTurns: number;
 }
 
 /** 开荒参数（可选；只有显式声明 knowledge.frontierFile 的剧本才启用） */
@@ -493,6 +518,38 @@ export interface RegionState {
   readonly lastOwner?: FactionId | null;
   /** 起义状态；缺省 = 无起义 */
   readonly rebellion?: RebellionState;
+  /**
+   * 最近一次起义爆发的回合。★不随 rebellion 清空：重占/归附恢复正常后仍保留，
+   * 用来实现「该地块叛乱后 N 回合内不得再次叛乱」。旧存档缺省 = 从未起义。
+   */
+  readonly lastRebellionTurn?: number;
+}
+
+/**
+ * 起义冷却还剩多少个回合（含当前回合）不能再起义；0 = 不在冷却中。
+ *
+ * 口径：起义发生在 T，则 T+1 … T+N 共 N 个回合被压住，T+N+1 起恢复判定。
+ * 由「爆发回合」起算，不是由「起义结束」起算。
+ */
+export function rebellionCooldownRemaining(
+  region: Pick<RegionState, 'lastRebellionTurn'>,
+  turn: number,
+  cooldownTurns: number,
+): number {
+  const last = region.lastRebellionTurn;
+  if (last === undefined || !Number.isFinite(last) || !Number.isFinite(turn)) return 0;
+  if (!(cooldownTurns > 0)) return 0;
+  const elapsed = turn - last;
+  if (elapsed < 1) return 0; // 爆发当回合由 rebellion 状态本身阻止二次触发
+  return Math.max(0, cooldownTurns - elapsed + 1);
+}
+
+export function isRebellionOnCooldown(
+  region: Pick<RegionState, 'lastRebellionTurn'>,
+  turn: number,
+  cooldownTurns: number,
+): boolean {
+  return rebellionCooldownRemaining(region, turn, cooldownTurns) > 0;
 }
 
 export interface FactionState {
@@ -542,6 +599,10 @@ export interface RelationEntry {
   /** 历史宣战次数；旧存档缺省 0 */
   readonly wars?: number;
   readonly lastWarTurn?: number;
+  /** 本场战争的发动方；只给他记「宣战民心损失」与回补额度 */
+  readonly warMoraleInitiator?: FactionId;
+  /** 发动方本场战争还能通过战胜回补的民心额度；缺省 0 */
+  readonly warMoraleRemaining?: number;
 }
 
 export interface GameState {

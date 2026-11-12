@@ -25,7 +25,7 @@ import type {
   RngState,
   WorldConfig,
 } from './state.ts';
-import { GRUDGE_MAX, relationKey } from './state.ts';
+import { GRUDGE_MAX, relationKey, warMoraleParams } from './state.ts';
 import type {
   AcceptedOrder,
   ClampRecord,
@@ -92,6 +92,7 @@ interface MRegion {
   lastBattleTurn: number | null;
   lastOwner?: FactionId | null;
   rebellion?: RebellionState;
+  lastRebellionTurn?: number;
 }
 interface MFaction {
   id: FactionId;
@@ -156,6 +157,7 @@ class Draft {
         lastBattleTurn: r.lastBattleTurn,
         ...(r.lastOwner !== undefined ? { lastOwner: r.lastOwner } : {}),
         ...(r.rebellion !== undefined ? { rebellion: { ...r.rebellion } } : {}),
+        ...(r.lastRebellionTurn !== undefined ? { lastRebellionTurn: r.lastRebellionTurn } : {}),
       };
     }
     const factions: Record<FactionId, FactionState> = {};
@@ -300,6 +302,8 @@ export function resolveTurn(input: ApplyInput): TurnOutcome {
         if (!r) return;
         if (m.rebellion === null) delete r.rebellion;
         else r.rebellion = { ...m.rebellion };
+        // 冷却起点只在真正爆发起义时写入；清空 rebellion 时保留，重占/归附后仍生效
+        if (m.lastRebellionTurn !== undefined) r.lastRebellionTurn = m.lastRebellionTurn;
         return;
       }
       case 'add_region_food': {
@@ -340,6 +344,28 @@ export function resolveTurn(input: ApplyInput): TurnOutcome {
         const before = f.morale;
         f.morale = clamp(Math.round(f.morale + m.delta), world.economy.moraleMin, world.economy.moraleMax);
         record(deltas, `faction:${m.factionId}`, 'morale', before, f.morale, m.reason, source);
+        return;
+      }
+      case 'grant_war_victory_morale': {
+        const f = draft.factions.get(m.factionId);
+        if (!f) return;
+        const wm = warMoraleParams(world);
+        const key = relationKey(m.factionId, m.opponent);
+        const entry = draft.relations.get(key);
+        // 未启用战争民心 / 不是本场战争的发动方 ⇒ 没有额度，不发放。
+        // 「战争胜利带来的民心增加最多只相当于发动战争的损失」在此处硬钳，
+        // 逐条 mutation 顺序扣减额度，因此同回合多场胜仗也不会超额。
+        const remaining = wm && entry?.warMoraleInitiator === m.factionId
+          ? Math.max(0, entry.warMoraleRemaining ?? 0)
+          : 0;
+        const granted = Math.max(0, Math.min(m.delta, remaining));
+        if (granted <= 0) return;
+        const before = f.morale;
+        f.morale = clamp(Math.round(f.morale + granted), world.economy.moraleMin, world.economy.moraleMax);
+        record(deltas, `faction:${m.factionId}`, 'morale', before, f.morale, m.reason, source);
+        if (entry) {
+          draft.relations.set(key, { ...entry, warMoraleRemaining: remaining - granted });
+        }
         return;
       }
       case 'add_faction_manpower': {
@@ -439,6 +465,11 @@ export function resolveTurn(input: ApplyInput): TurnOutcome {
         const prev = draft.relations.get(key);
         if (prev?.kind === m.kind) return;
         const enteringWar = m.kind === 'war' && prev?.kind !== 'war';
+        const wm = warMoraleParams(world);
+        // ★宣战民心账本：只记给「发动方」，被攻击方不因交战掉民心。
+        //   只有真正从非 war 进入 war 才收费（重复 set_relation 已在上面提前返回），
+        //   所以 statecraft 的 declare_war 与 combat 的进攻自动宣战同回合也不会重复扣。
+        const initiator = enteringWar && wm && m.initiator ? m.initiator : null;
         draft.relations.set(key, {
           kind: m.kind as RelationEntry['kind'],
           sinceTurn: turn,
@@ -447,7 +478,22 @@ export function resolveTurn(input: ApplyInput): TurnOutcome {
           ...(enteringWar || prev?.lastWarTurn !== undefined
             ? { lastWarTurn: enteringWar ? turn : prev!.lastWarTurn! }
             : {}),
+          ...(initiator
+            ? { warMoraleInitiator: initiator, warMoraleRemaining: Math.min(wm!.declarationCost, wm!.victoryGainCap) }
+            : {}),
         });
+        if (initiator) {
+          const f = draft.factions.get(initiator);
+          if (f) {
+            const before = f.morale;
+            f.morale = clamp(
+              Math.round(f.morale - wm!.declarationCost),
+              world.economy.moraleMin,
+              world.economy.moraleMax,
+            );
+            record(deltas, `faction:${initiator}`, 'morale', before, f.morale, '宣战失民', source);
+          }
+        }
         events.push({
           type: 'diplomacy_changed',
           turn,
@@ -471,6 +517,8 @@ export function resolveTurn(input: ApplyInput): TurnOutcome {
           grudge: after,
           ...(prev?.wars !== undefined ? { wars: prev.wars } : {}),
           ...(prev?.lastWarTurn !== undefined ? { lastWarTurn: prev.lastWarTurn } : {}),
+          ...(prev?.warMoraleInitiator !== undefined ? { warMoraleInitiator: prev.warMoraleInitiator } : {}),
+          ...(prev?.warMoraleRemaining !== undefined ? { warMoraleRemaining: prev.warMoraleRemaining } : {}),
         });
         record(deltas, `relation:${key}`, 'grudge', before, after, m.reason, source);
         return;

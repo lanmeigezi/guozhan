@@ -271,6 +271,10 @@ function lowMoraleHelp() {
   return S.layout?.rules?.lowMorale ?? null;
 }
 
+function warMoraleHelp() {
+  return S.layout?.rules?.warMorale ?? null;
+}
+
 function infraHelp() {
   return S.layout?.rules?.infrastructure ?? null;
 }
@@ -1076,7 +1080,8 @@ function logEvent(event) {
     case 'rebellion_started':
       appendLog(
         'warn',
-        `${turnPrefix}起义：${regionName(event.regionId)} 反抗 ${factionName(event.original)}，${formatTroops(event.rebelTroops)} 起义民兵据城（${event.cause === 'claimed_conscription' ? '征兵激起' : '动乱爆发'}）。`,
+        `${turnPrefix}起义：${regionName(event.regionId)} 反抗 ${factionName(event.original)}，${formatTroops(event.rebelTroops)} 起义民兵据城（${event.cause === 'claimed_conscription' ? '征兵激起' : '动乱爆发'}）` +
+          `${event.cooldownTurns != null ? `；该地块此后 ${event.cooldownTurns} 回合内不会再自动叛乱` : ''}。`,
         'is-danger',
       );
       break;
@@ -1612,6 +1617,16 @@ function renderMoraleCard(self) {
     }));
   }
 
+  const wmHelp = warMoraleHelp();
+  if (wmHelp) {
+    card.append(h('div', {
+      class: 'morale-line',
+      text: `战争民心：发动方宣战 −${wmHelp.declarationCost}；` +
+        `本场战争战胜累计最多回补 +${wmHelp.victoryGainCap}（不能靠打仗刷民心）；` +
+        `被攻击方在丢失地块前不因交战掉民心。`,
+    }));
+  }
+
   const deltas = (S.lastReport?.baseline ?? [])
     .filter((d) => d.scope === `faction:${self.id}` && d.field === 'morale');
   if (deltas.length > 0) {
@@ -2018,13 +2033,44 @@ function renderDetail() {
     if (reb.claimedBy) {
       bits.push(`已归附 ${reb.claimedByName ?? reb.claimedBy}`);
       if (reb.claimedTurn != null) bits.push(`宣称于 T${reb.claimedTurn}`);
-      if (reb.conscriptionTurns != null) bits.push(`${reb.conscriptionTurns} 回合内征兵会再次起义`);
+      if (reb.conscriptionTurns != null) bits.push(`${reb.conscriptionTurns} 回合内征兵会再次起义（禁叛冷却的唯一例外）`);
     } else {
       bits.push('起义军据城；只有原属国杀光全部民兵才能重占');
     }
     bits.push(`起义民兵 ${formatTroops(reb.rebelTroops ?? 0)}`);
     box.append(h('div', { class: 'detail-note detail-note--danger', text: bits.join('；') }));
   }
+
+  // ── 右侧状态栏：叛乱冷却 + 能否征兵（并列显示，二者共用同一份快照） ──
+  const cd = region.rebellionCooldown;
+  const turnNow = Number.isFinite(S.snapshot?.turn) ? S.snapshot.turn : null;
+  const cooldownText = cd
+    ? `叛乱冷却：T${cd.lastRebellionTurn} 起义，${cd.totalTurns} 回合内不会再自动叛乱` +
+      `（还剩 ${cd.remainingTurns} 回合）；冷却期内动乱可正常回落。`
+    : '叛乱冷却：无 —— 该地块不受禁叛限制。';
+  box.append(h('div', { class: 'detail-note', text: cooldownText }));
+
+  const reb = region.rebellion;
+  let conscriptText = '能否征兵：可征兵（无归附征兵风险）。';
+  let conscriptDanger = false;
+  if (reb?.claimedBy && reb.claimedTurn != null && reb.conscriptionTurns != null && turnNow !== null) {
+    const elapsed = turnNow - reb.claimedTurn;
+    const left = reb.conscriptionTurns - elapsed + 1;
+    if (elapsed >= 1 && left > 0) {
+      conscriptText = `能否征兵：危险 —— 归附窗口内立即征兵会再次起义（还剩 ${left} 回合）；` +
+        '这是禁叛冷却的唯一例外。';
+      conscriptDanger = true;
+    } else {
+      conscriptText = '能否征兵：可征兵（归附征兵窗口已过）。';
+    }
+  } else if (reb?.claimedBy) {
+    conscriptText = '能否征兵：归附窗口内立即征兵会触发再起义，其余情况受禁叛冷却保护。';
+  }
+  box.append(h('div', {
+    class: `detail-note${conscriptDanger ? ' detail-note--danger' : ''}`,
+    text: conscriptText,
+  }));
+
   if (region.frontier && region.owner === null) {
     box.append(h('div', {
       class: 'detail-note',

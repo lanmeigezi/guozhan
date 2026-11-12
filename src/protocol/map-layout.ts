@@ -223,12 +223,21 @@ export const UnrestEffectsHelpSchema = z
   })
   .strict();
 
+/** 战争民心账本解释信息（只给 UI 显示，不参与裁决）；未启用的剧本为 null */
+export const WarMoraleHelpSchema = z
+  .object({
+    declarationCost: z.number().int().min(0),
+    victoryGainCap: z.number().int().min(0),
+  })
+  .strict();
+
 export const RulesHelpSchema = z
   .object({
     morale: MoraleHelpSchema,
     lowMorale: LowMoraleHelpSchema.nullable(),
     infrastructure: InfrastructureHelpSchema.nullable(),
     unrestEffects: UnrestEffectsHelpSchema.nullable(),
+    warMorale: WarMoraleHelpSchema.nullable(),
   })
   .strict();
 

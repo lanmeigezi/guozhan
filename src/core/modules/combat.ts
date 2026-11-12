@@ -18,7 +18,7 @@
  *    否则会出现"战报说僵持、城池却易手"的记录/状态永久脱节。
  */
 import type { FactionId, GameState, RegionId, UnitId, UnitTypeDef, WorldConfig } from '../state.ts';
-import { getRelation, isAttackAdjacent, isInfantryType, terrainTraits, unitsIn, waterRouteNeighbors, waterRoutePath } from '../state.ts';
+import { getRelation, isAttackAdjacent, isInfantryType, relationKey, terrainTraits, unitsIn, warMoraleParams, waterRouteNeighbors, waterRoutePath } from '../state.ts';
 import { amplifiedUnrest, unrestDefenseFactor } from '../unrest.ts';
 import type { AcceptedOrder, ResolveContext, RuleModule, StateSlice } from '../module.ts';
 import { rollDice, type DeterministicRng } from '../rng.ts';
@@ -34,6 +34,28 @@ interface AttackCmd {
 }
 
 const NEUTRAL = 'neutral';
+
+/**
+ * 战争胜利民心：只有「本场战争的发动方」走账本，实际发放量由核心按
+ * relations[key].warMoraleRemaining 钳制（累计 ≤ 宣战损失），并逐条扣减额度。
+ *
+ * 非发动方（被攻击方守住）、中立区夺城、以及未启用 governance.warMorale 的剧本
+ * 一律沿用原来的 +3/+5/+6，行为逐字不变。
+ */
+function grantVictoryMorale(
+  ctx: ResolveContext,
+  factionId: FactionId,
+  opponent: FactionId | null,
+  delta: number,
+  reason: string,
+  warInitiator: FactionId | null,
+): void {
+  if (warMoraleParams(ctx.world) && opponent && opponent !== NEUTRAL && warInitiator === factionId) {
+    ctx.mutate({ op: 'grant_war_victory_morale', factionId, opponent, delta, reason });
+    return;
+  }
+  ctx.mutate({ op: 'add_faction_morale', factionId, delta, reason });
+}
 
 /** 守方地形对步兵的额外乘数（只作用于 defense；旧剧本无 traits 时恒为 1） */
 function infantryTerrainMultiplier(world: WorldConfig, regionId: RegionId): number {
@@ -289,8 +311,15 @@ function resolveOneAttack(ctx: ResolveContext, order: AcceptedOrder, cmd: Attack
 
   // 进攻非中立势力 ⇒ 自动进入战争状态（Diplomacy 式：行动即宣战，免去"忘了宣战"的挫败）
   const startedWar = target.owner !== null && getRelation(ctx.state, attackerId, target.owner) !== 'war';
+  // 本场战争的发动方：优先读已落库的关系（可能是上一回合宣战、或本回合 statecraft 先宣告），
+  // 否则就是这次「进攻即宣战」的攻方。被攻击方永远不是发动方。
+  const warOpponent = target.owner !== null && target.owner !== NEUTRAL ? target.owner : null;
+  const warInitiator = warOpponent
+    ? (ctx.state.relations[relationKey(attackerId, warOpponent)]?.warMoraleInitiator
+      ?? (startedWar ? attackerId : null))
+    : null;
   if (startedWar && target.owner !== null) {
-    ctx.mutate({ op: 'set_relation', a: attackerId, b: target.owner, kind: 'war' });
+    ctx.mutate({ op: 'set_relation', a: attackerId, b: target.owner, kind: 'war', initiator: attackerId });
     if (ctx.world.capabilities?.grudge === true) {
       ctx.mutate({
         op: 'add_relation_grudge',
@@ -474,10 +503,10 @@ function resolveOneAttack(ctx: ResolveContext, order: AcceptedOrder, cmd: Attack
     // 攻方投入的部队进驻；未投入部分留在原区
     ctx.mutate({ op: 'move_unit', unitId: cmd.unitId, toRegion: cmd.targetRegion, path: attackPath, movementSpent: 0 });
     ctx.emit({ type: 'region_captured', turn: ctx.turn, regionId: cmd.targetRegion, from: target.owner, to: attackerId, reason: captureReason === 'morale_collapse' ? 'morale_collapse' : 'force_ratio' });
-    ctx.mutate({ op: 'add_faction_morale', factionId: attackerId, delta: 5, reason: `攻取 ${targetDef.name}` });
+    grantVictoryMorale(ctx, attackerId, warOpponent, 5, `攻取 ${targetDef.name}`, warInitiator);
     // ★收复失地：夺回自己的旧土，额外民心加成（只在启用治理模块的剧本生效）
     if (recaptured && ctx.world.governance) {
-      ctx.mutate({ op: 'add_faction_morale', factionId: attackerId, delta: 6, reason: `收复故土 ${targetDef.name}（民心大振）` });
+      grantVictoryMorale(ctx, attackerId, warOpponent, 6, `收复故土 ${targetDef.name}（民心大振）`, warInitiator);
     }
     if (target.owner) ctx.mutate({ op: 'add_faction_morale', factionId: target.owner, delta: -8, reason: `失守 ${targetDef.name}` });
     if (target.owner && ctx.world.capabilities?.grudge === true) {
@@ -509,7 +538,8 @@ function resolveOneAttack(ctx: ResolveContext, order: AcceptedOrder, cmd: Attack
   // ── 守城成功：挡住了进攻（击退/守住），守方士气加成 ──
   //   ★只在启用治理模块的剧本生效；旧剧本（无 governance）保持原行为。
   if (!captured && target.owner && outcome !== 'defender_rout' && ctx.world.governance) {
-    ctx.mutate({ op: 'add_faction_morale', factionId: target.owner, delta: 3, reason: `守住 ${targetDef.name}（士气大振）` });
+    // 被攻击方没付宣战代价，守城加成照旧；不因「和该国交战」而降低民心。
+    grantVictoryMorale(ctx, target.owner, attackerId, 3, `守住 ${targetDef.name}（士气大振）`, warInitiator);
   }
 
   // ── 地区动乱：战火 + 夺城 + 开战动员，均受**全国民心**放大 ──

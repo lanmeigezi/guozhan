@@ -57,5 +57,10 @@
     "$comment": "地区动乱只惩罚本区：产出乘数 = 1 - unrest × outputPenaltyPerPoint；守备乘数 = 1 - unrest × defensePenaltyPerPoint。",
     "outputPenaltyPerPoint": 0.004,
     "defensePenaltyPerPoint": 0.003
+  },
+  "warMorale": {
+    "$comment": "grand-front 专属：发动战争（宣战/进攻自动开战）只对发动方一次性扣 5 民心，并记一笔战债；本场战争的战胜增益（攻取/收复故土/守住）累计最多回补 5，不能靠打仗刷民心。被攻击方不付这笔钱，在丢失地块前不因交战掉民心（失守 −8 属失地代价）。共享 governance.json 不写这一节 ⇒ 旧治理剧本行为不变。",
+    "declarationCost": 5,
+    "victoryGainCap": 5
   }
 }

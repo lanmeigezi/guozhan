@@ -9,10 +9,15 @@
  *   claim 后 claimedConscriptionTurns 回合内征兵 → 再次起义；
  *   claimedBy 区域动乱 ≤ normalizeUnrest → 恢复正常，解除守城锁定。
  *
+ * ★冷却：起义爆发后 rebellionCooldownTurns 个回合内，该地块不会再因动乱满 100
+ *   而二次起义（重占/归附后仍生效，起点存在 region.lastRebellionTurn）。
+ *   唯一例外是「归附后立即征兵」——那是玩家自己踩的惩罚窗口，仍按原规则触发，
+ *   每次真正爆发起义都会重置冷却起点。
+ *
  * ★旧剧本没有 world.rebellion 且 moduleOrder 不注册本模块 ⇒ 行为完全不变。
  */
 import type { FactionId, GameState, RebellionState, RegionId, UnitId, WorldConfig } from '../state.ts';
-import { rebelTroopsInRegion, regionPopulation, unitsIn } from '../state.ts';
+import { isRebellionOnCooldown, rebelTroopsInRegion, regionPopulation, unitsIn } from '../state.ts';
 import type { AcceptedOrder, ResolveContext, RuleModule, StateSlice } from '../module.ts';
 import { nearestOwnedRegion } from './combat.ts';
 
@@ -29,6 +34,7 @@ export const rebellionModule: RuleModule = {
     'regions.owner',
     'regions.unrest',
     'regions.rebellion',
+    'regions.lastRebellionTurn',
     'factions.morale',
     'factions.eliminated',
     'units.regionId',
@@ -38,6 +44,7 @@ export const rebellionModule: RuleModule = {
     'regions.owner',
     'regions.unrest',
     'regions.rebellion',
+    'regions.lastRebellionTurn',
     'units.regionId',
     'units.troops',
   ] as readonly StateSlice[],
@@ -76,6 +83,8 @@ export const rebellionModule: RuleModule = {
     for (const order of claims) handleClaim(ctx, order, order.command as ClaimRebellionCmd);
 
     // 3. 归附后窗口期内征兵 → 再次起义
+    //    ★这是冷却的唯一例外：「被宣称后除了立即征兵，其他情况均不能起义」。
+    //      归附窗口本来就是紧接宣称的 3 个回合，属于玩家主动踩惩罚，保留原行为。
     const triggered = new Set<RegionId>();
     for (const order of ctx.orders) {
       if (order.kind !== 'recruit') continue;
@@ -93,11 +102,12 @@ export const rebellionModule: RuleModule = {
       triggerUprising(ctx, rid, reb.claimedBy, 'claimed_conscription');
     }
 
-    // 4. 动乱达到 100 的新起义
+    // 4. 动乱达到 100 的新起义（冷却期内一律压住）
     for (const rid of Object.keys(ctx.state.regions).sort()) {
       const st = ctx.state.regions[rid]!;
       if (st.rebellion || st.owner === null) continue;
       if (st.unrest < 100) continue;
+      if (isRebellionOnCooldown(st, ctx.turn, cfg.rebellionCooldownTurns)) continue;
       triggerUprising(ctx, rid, st.owner, 'unrest');
     }
   },
@@ -215,7 +225,8 @@ function triggerUprising(
 
   ctx.mutate({ op: 'set_region_owner', regionId, owner: null });
   const rebellion: RebellionState = { from, sinceTurn: ctx.turn };
-  ctx.mutate({ op: 'set_region_rebellion', regionId, rebellion });
+  // ★冷却起点落库：即便之后重占/归附把 rebellion 清空，这个回合号仍留在地块上
+  ctx.mutate({ op: 'set_region_rebellion', regionId, rebellion, lastRebellionTurn: ctx.turn });
   setUnrest(ctx, regionId, 100);
 
   const pop = Math.floor(regionPopulation(def.baseManpower, st.development));
@@ -237,6 +248,7 @@ function triggerUprising(
     original: from,
     cause,
     rebelTroops: troops,
+    cooldownTurns: cfg.rebellionCooldownTurns,
     ...(existing?.claimedBy ? { claimedBy: existing.claimedBy } : {}),
   });
 }
