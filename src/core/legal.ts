@@ -25,6 +25,7 @@ import type {
 import {
   aliveFactions,
   civilianPopulation,
+  generalMovementBudget,
   getGrudge,
   getRelation,
   INTEL_VALID_TURNS,
@@ -100,6 +101,7 @@ const DEFAULT_PER_KIND_CAP: Record<string, number> = {
   trade_slaves: 8,
   claim_rebellion: 8,
   settle_region: 8,
+  assign_general: 8,
   disband: 3,
 };
 
@@ -318,7 +320,8 @@ export function enumerateLegalActions(
     const t = world.unitTypes[u.typeId];
     if (!t) continue;
     const waterCapable = isWaterCapable(u.typeId);
-    for (const r of reachableRegions(state, world, fid, u.regionId, t.movement, t)) {
+    const budget = generalMovementBudget(world, u, t.movement);
+    for (const r of reachableRegions(state, world, fid, u.regionId, budget, t)) {
       // 只列出"有战略意义"的目的地：己方边境、中立区、友方要地，避免上千条无意义移动。
       // 水师的港口本来就不多，全部列出，才能体现"一回合多格水路机动"。
       const target = state.regions[r.regionId];
@@ -337,7 +340,7 @@ export function enumerateLegalActions(
         sourceRegion: u.regionId,
         targetRegion: r.regionId,
         path: r.path,
-        estimate: { movementCost: r.cost, movement: t.movement },
+        estimate: { movementCost: r.cost, movement: budget },
         priority: 2,
       });
     }
@@ -828,6 +831,47 @@ export function enumerateLegalActions(
       description: `遣散 ${u.troops} 兵：兵源 +${u.troops}，返还约 ${refund} 金；该部队从地图移除`,
       priority: 9,
     });
+  }
+
+  // ── 将领调任：把在编将领改派到另一支己方「无将」部队 ──
+  //   史料名册是不可变内容；已随建制退场的将领不出现在合法空间（不复活）。
+  if (world.generals && wanted('assign_general')) {
+    const roster = Object.values(world.generals)
+      .filter((g) => g.factionId === fid)
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const ownUnits = Object.values(state.units)
+      .filter((u) => u.ownerId === fid && u.troops > 0)
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const inService = new Map<string, string>();
+    for (const u of ownUnits) if (u.generalId) inService.set(u.generalId, u.id);
+    for (const g of roster) {
+      const from = inService.get(g.id);
+      if (!from) continue;
+      const e = g.effects;
+      for (const u of ownUnits) {
+        if (u.id === from || u.generalId) continue;
+        push({
+          id: `assign:${g.id}:${u.id}`,
+          kind: 'assign_general',
+          label: `调 ${g.name} 统率 ${world.unitTypes[u.typeId]?.name ?? u.typeId}(${u.troops})`,
+          command: { kind: 'assign_general', generalId: g.id, unitId: u.id },
+          sourceRegion: u.regionId,
+          estimate: {
+            attackMultiplier: e.attackMultiplier,
+            defenseMultiplier: e.defenseMultiplier,
+            siegeMultiplier: e.siegeMultiplier,
+            moraleMultiplier: e.moraleMultiplier,
+            movementBonus: e.movementBonus,
+          },
+          description:
+            `${g.title ?? '将领'}｜${g.source}：${g.traits.map((tr) => tr.text).join('；')}。` +
+            `攻 ×${e.attackMultiplier} / 守 ×${e.defenseMultiplier}` +
+            `${e.siegeMultiplier > 1 ? ` / 攻城 ×${e.siegeMultiplier}` : ''}` +
+            `${e.movementBonus > 0 ? ` / 行军 +${e.movementBonus}` : ''}`,
+          priority: 5,
+        });
+      }
+    }
   }
 
   return out

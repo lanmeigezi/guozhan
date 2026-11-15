@@ -14,6 +14,8 @@
 
 export type RegionId = string;
 export type FactionId = string;
+/** 将领 id。将领名册是不可变内容（WorldConfig.generals），部署才进权威状态 */
+export type GeneralId = string;
 
 /** 间谍情报有效期：侦察当回合起，之后 INTEL_VALID_TURNS 个快照内保持 exact 视图 */
 export const INTEL_VALID_TURNS = 3;
@@ -413,6 +415,105 @@ export interface RebellionParams {
   readonly rebellionCooldownTurns: number;
 }
 
+// ─────────────────────────────────────────────────────────────
+// 将领（可选；只有显式声明 knowledge.generalsFile 的剧本才启用）
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * 史料特征条目。text 是史书记载的**概括**（不是逐字引文），source 给可核查篇名。
+ * 纯展示用，不参与裁决；裁决只认 effects。
+ */
+export interface GeneralTrait {
+  readonly text: string;
+  readonly source: string;
+}
+
+/** 将领的数值效果。★全部是确定性乘数/加数，由核心裁决，LLM 不得修改 */
+export interface GeneralEffects {
+  /** 攻方战力乘数（该将领所在部队进攻时） */
+  readonly attackMultiplier: number;
+  /** 守方战力乘数 */
+  readonly defenseMultiplier: number;
+  /** 攻方对有要塞的目标时额外乘数（≥1） */
+  readonly siegeMultiplier: number;
+  /** 该部队士气项乘数（作用于战力系数，不改持久化民心） */
+  readonly moraleMultiplier: number;
+  /** 该部队移动力加数（整数点） */
+  readonly movementBonus: number;
+  /** 兵种专精：带该兵种时额外乘数；null = 无专精 */
+  readonly unitAffinity: {
+    readonly typeId: UnitTypeId;
+    readonly multiplier: number;
+  } | null;
+}
+
+/**
+ * 将领定义 —— 不可变内容。
+ *
+ * ★只收史料可考的真实人物：docs/research/02-histrategy.md 记下的 Histrategy 数值禁区
+ *   「❌ 不要凭空创造新的武将或势力」在本项目的落点。名册进 contentHash，
+ *   改一个数字或加一个虚构人物都会让旧存档 fail-closed。
+ */
+export interface GeneralDef {
+  readonly id: GeneralId;
+  readonly name: string;
+  readonly title?: string;
+  /** 所属势力（将领只能统率本势力部队） */
+  readonly factionId: FactionId;
+  /** 开局绑定的部队 id；配置加载时写入 UnitState.generalId */
+  readonly assignedTo: UnitId;
+  /** 主要史料出处 */
+  readonly source: string;
+  readonly traits: readonly GeneralTrait[];
+  readonly effects: GeneralEffects;
+}
+
+/** 取将领定义；未启用将领系统 / id 不存在 ⇒ null */
+export function generalOf(world: WorldConfig, generalId: GeneralId | undefined): GeneralDef | null {
+  if (!generalId || !world.generals) return null;
+  return world.generals[generalId] ?? null;
+}
+
+/** 取某部队的将领；未启用 / 没配将领 ⇒ null */
+export function generalForUnit(
+  world: WorldConfig,
+  unit: Pick<UnitState, 'generalId'>,
+): GeneralDef | null {
+  return generalOf(world, unit.generalId);
+}
+
+/**
+ * 将领对该部队战力的乘数（单一真源：实战 computePower 与 UI 预估 sumPower 共用）。
+ *
+ * 口径：攻/守基础乘数 × 攻城乘数（仅攻方且目标有要塞）× 兵种专精 × 士气乘数。
+ * 守方永远不享受 siegeMultiplier，避免「守城也算攻城」。
+ */
+export function generalCombatMultiplier(
+  world: WorldConfig,
+  unit: Pick<UnitState, 'generalId' | 'typeId'>,
+  stat: 'attack' | 'defense',
+  opts: { readonly siege?: boolean } = {},
+): number {
+  const g = generalForUnit(world, unit);
+  if (!g) return 1;
+  const e = g.effects;
+  let m = stat === 'attack' ? e.attackMultiplier : e.defenseMultiplier;
+  if (stat === 'attack' && opts.siege === true) m *= e.siegeMultiplier;
+  if (e.unitAffinity && e.unitAffinity.typeId === unit.typeId) m *= e.unitAffinity.multiplier;
+  m *= e.moraleMultiplier;
+  return Math.round(m * 10000) / 10000;
+}
+
+/** 该部队本回合可用的移动力 = 兵种基础 + 将领行军加成（单一真源：movement 与 legal 共用） */
+export function generalMovementBudget(
+  world: WorldConfig,
+  unit: Pick<UnitState, 'generalId'>,
+  baseMovement: number,
+): number {
+  const g = generalForUnit(world, unit);
+  return baseMovement + (g?.effects.movementBonus ?? 0);
+}
+
 /** 开荒参数（可选；只有显式声明 knowledge.frontierFile 的剧本才启用） */
 export interface FrontierParams {
   readonly settleGoldCost: number;
@@ -446,6 +547,8 @@ export interface WorldConfig {
   readonly slaveTrade?: SlaveTradeParams;
   /** 起义规则。旧剧本没有该字段 ⇒ 动乱满 100 不会自动起义 */
   readonly rebellion?: RebellionParams;
+  /** 将领名册（不可变内容）。旧剧本没有该字段 ⇒ 将领系统整体关闭、行为逐字不变 */
+  readonly generals?: Readonly<Record<GeneralId, GeneralDef>>;
   /** 开荒规则。旧剧本没有该字段 ⇒ 不出现 settle_region */
   readonly frontier?: FrontierParams;
   /**
@@ -463,6 +566,8 @@ export interface WorldConfig {
     readonly rebellion?: boolean;
     /** 是否启用开荒（由 frontier 配置推导） */
     readonly frontier?: boolean;
+    /** 是否启用将领系统（由 generals 配置推导） */
+    readonly generals?: boolean;
   };
   readonly maxTurns: number;
   /** 单一势力占领比例达到此值即征服胜利（来自 scenario.json 的 victory） */
@@ -589,6 +694,11 @@ export interface UnitState {
   readonly title?: UnitTitle;
   /** 守城锁定：不能移动、进攻、分兵、合兵；用于起义归附后的守城民兵 */
   readonly garrisonOnly?: boolean;
+  /**
+   * 统率该部队的将领。★将领随建制走：部队被歼 / 被合并即退场，不复活
+   * （Histrategy 禁区「不要让已死亡的人物复活」）；征兵、分兵产生的新部队不带将领。
+   */
+  readonly generalId?: GeneralId;
 }
 
 export interface RelationEntry {

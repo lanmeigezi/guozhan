@@ -57,10 +57,16 @@ function stacksOf(
   regionId: RegionId,
 ): ProjectedRegion['stacks'] {
   if (!canSeeStacks(state, world, viewer, regionId)) return undefined;
-  const groups = new Map<string, { ownerId: string; typeName: string; troops: number; title?: 'bandit_conscript' | 'rebel_militia' | 'rebel_garrison' }>();
+  const groups = new Map<string, {
+    ownerId: string; typeName: string; troops: number;
+    title?: 'bandit_conscript' | 'rebel_militia' | 'rebel_garrison';
+    generalId?: string; generalName?: string; generalTitle?: string;
+  }>();
   for (const u of Object.values(state.units)) {
     if (u.regionId !== regionId || u.troops <= 0) continue;
-    const key = `${u.ownerId}\u0000${u.typeId}\u0000${u.title ?? ''}`;
+    const def = u.generalId ? world.generals?.[u.generalId] : undefined;
+    // 按将领分组：同一将领带的两支同兵种部队也要拆开显示，避免"两个白起"合成一行
+    const key = `${u.ownerId}\u0000${u.typeId}\u0000${u.title ?? ''}\u0000${u.generalId ?? ''}`;
     const g = groups.get(key);
     if (g) g.troops += u.troops;
     else {
@@ -69,6 +75,7 @@ function stacksOf(
         typeName: world.unitTypes[u.typeId]?.name ?? u.typeId,
         troops: u.troops,
         ...(u.title !== undefined ? { title: u.title } : {}),
+        ...(def ? { generalId: def.id, generalName: def.name, ...(def.title ? { generalTitle: def.title } : {}) } : {}),
       });
     }
   }
@@ -81,6 +88,9 @@ function stacksOf(
       troops: g.troops,
       tier: armyTier(g.troops),
       ...(g.title ? { title: g.title } : {}),
+      ...(g.generalId ? { generalId: g.generalId } : {}),
+      ...(g.generalName ? { generalName: g.generalName } : {}),
+      ...(g.generalTitle ? { generalTitle: g.generalTitle } : {}),
       seenTurnsAgo: 0,
     }));
 }
@@ -234,6 +244,29 @@ export function buildSnapshot(opts: SnapshotOptions): Snapshot {
     stateId: digest,
     regions,
     factions,
+    // ★名册是公开史料（不含部署）；部署只在上面按迷雾裁剪过的 stacks 里
+    ...(world.generals
+      ? {
+          generalRoster: Object.values(world.generals)
+            .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+            .map((g) => ({
+              id: g.id,
+              name: g.name,
+              ...(g.title ? { title: g.title } : {}),
+              factionId: g.factionId,
+              source: g.source,
+              traits: g.traits.map((t) => ({ text: t.text, source: t.source })),
+              effects: {
+                attackMultiplier: g.effects.attackMultiplier,
+                defenseMultiplier: g.effects.defenseMultiplier,
+                siegeMultiplier: g.effects.siegeMultiplier,
+                moraleMultiplier: g.effects.moraleMultiplier,
+                movementBonus: g.effects.movementBonus,
+                unitAffinity: g.effects.unitAffinity ? { ...g.effects.unitAffinity } : null,
+              },
+            })),
+        }
+      : {}),
     alerts: [...opts.alerts],
     legalActions,
     mapText: buildMapText(state, world, viewerRecipient, visibility),

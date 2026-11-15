@@ -18,7 +18,7 @@
  *    否则会出现"战报说僵持、城池却易手"的记录/状态永久脱节。
  */
 import type { FactionId, GameState, RegionId, UnitId, UnitTypeDef, WorldConfig } from '../state.ts';
-import { getRelation, isAttackAdjacent, isInfantryType, relationKey, terrainTraits, unitsIn, warMoraleParams, waterRouteNeighbors, waterRoutePath } from '../state.ts';
+import { generalCombatMultiplier, generalForUnit, getRelation, isAttackAdjacent, isInfantryType, relationKey, terrainTraits, unitsIn, warMoraleParams, waterRouteNeighbors, waterRoutePath } from '../state.ts';
 import { amplifiedUnrest, unrestDefenseFactor } from '../unrest.ts';
 import type { AcceptedOrder, ResolveContext, RuleModule, StateSlice } from '../module.ts';
 import { rollDice, type DeterministicRng } from '../rng.ts';
@@ -110,7 +110,7 @@ function sumPower(
   unitIds: readonly UnitId[],
   stat: 'attack' | 'defense',
   factionId: FactionId,
-  opts: { terrainDef?: number; fort?: number; enemyTypes?: readonly string[] } = {},
+  opts: { terrainDef?: number; fort?: number; enemyTypes?: readonly string[]; siege?: boolean } = {},
 ): number {
   const faction = ctx.state.factions[factionId];
   const morale = faction ? moraleFactor(faction.morale, world.combat.moraleCoefficient) : 1;
@@ -122,7 +122,8 @@ function sumPower(
     const t = world.unitTypes[u.typeId];
     if (!t) continue;
     const bonus = opts.enemyTypes ? counterBonus(world, u.typeId, opts.enemyTypes) : 1;
-    total += u.troops * t[stat] * bonus;
+    const genMult = generalCombatMultiplier(world, u, stat, { siege: opts.siege === true });
+    total += u.troops * t[stat] * bonus * genMult;
   }
   const terrain = opts.terrainDef ?? 1;
   const fort = opts.fort ?? 1;
@@ -202,12 +203,13 @@ export function estimateBattle(
   // ★地区动乱削弱本区守备；旧剧本无 governance ⇒ 乘数恒为 1
   const defUnrest = unrestDefenseFactor(world.governance, region?.unrest ?? 0);
   const terrainInfantry = infantryTerrainMultiplier(world, targetRegion);
+  const siege = (region?.fortLevel ?? 0) > 0;
 
   const atkTroops = attackerUnitIds.reduce((s, id) => s + (state.units[id]?.troops ?? 0), 0);
   const defTroops = defenderUnits.reduce((s, id) => s + (state.units[id]?.troops ?? 0), 0);
 
   const attackerPower = computePower(world, { state } as ResolveContext, attackerUnitIds, 'attack', attackerId, atkTroops, Math.max(1, atkTroops), {
-    enemyTypes: defenderTypes, moraleF: atkMorale,
+    enemyTypes: defenderTypes, moraleF: atkMorale, siege,
   });
   const defenderPower = computePower(world, { state } as ResolveContext, defenderUnits, 'defense', defenderId, defTroops, Math.max(1, defTroops), {
     enemyTypes: attackerTypes, moraleF: defMorale, terrainDef: terrainMod, fort: fortMod, unrestDef: defUnrest,
@@ -359,6 +361,8 @@ function resolveOneAttack(ctx: ResolveContext, order: AcceptedOrder, cmd: Attack
 
   const terrainMod = c.terrainModifier[targetDef.terrain]?.def ?? 1;
   const fortMod = fortMultiplier(world, target.fortLevel, attackerTypes);
+  // 攻城乘数只在攻方打有要塞的目标时生效（守方永远不吃 siegeMultiplier）
+  const siege = target.fortLevel > 0;
   const defenderMorale = ctx.state.factions[defenderId]?.morale ?? 60;
   const attackerMorale = ctx.state.factions[attackerId]?.morale ?? 60;
 
@@ -388,7 +392,7 @@ function resolveOneAttack(ctx: ResolveContext, order: AcceptedOrder, cmd: Attack
 
   for (let round = 1; round <= c.maxRounds; round++) {
     atkPower = computePower(world, ctx, attackerUnits, 'attack', attackerId, atkTroops, attackerTroopsTotal, {
-      enemyTypes: defenderTypes, moraleF: atkMoraleF,
+      enemyTypes: defenderTypes, moraleF: atkMoraleF, siege,
     });
     defPower = computePower(world, ctx, defenderUnits, 'defense', defenderId, defTroops, defenderTroopsTotal, {
       enemyTypes: attackerTypes, moraleF: defMoraleF, terrainDef: terrainMod, fort: fortMod, unrestDef: defUnrestF,
@@ -605,6 +609,8 @@ function resolveOneAttack(ctx: ResolveContext, order: AcceptedOrder, cmd: Attack
     });
   }
 
+  const attackerGeneral = world.generals ? generalEvidence(world, ctx, attackerUnits, 'attack', siege) : null;
+  const defenderGeneral = world.generals ? generalEvidence(world, ctx, defenderUnits, 'defense', false) : null;
   const attackerCounter = attackerTypes[0] ? counterBonus(world, attackerTypes[0], defenderTypes) : 1;
   const defenderCounter = defenderTypes.length > 0
     ? Math.max(...defenderTypes.map((dt) => counterBonus(world, dt, attackerTypes)))
@@ -644,6 +650,16 @@ function resolveOneAttack(ctx: ResolveContext, order: AcceptedOrder, cmd: Attack
         attackerBonus: round2(attackerCounter),
         defenderBonus: round2(defenderCounter),
       },
+      ...(attackerGeneral && defenderGeneral
+        ? {
+            generals: {
+              attacker: attackerGeneral.list,
+              defender: defenderGeneral.list,
+              attackerMultiplier: attackerGeneral.multiplier,
+              defenderMultiplier: defenderGeneral.multiplier,
+            },
+          }
+        : {}),
       unrest: {
         battle: battleUnrest.amount,
         capture: captureUnrest.amount,
@@ -669,7 +685,7 @@ function computePower(
   factionId: FactionId,
   currentTroops: number,
   startTroops: number,
-  opts: { enemyTypes: readonly string[]; moraleF: number; terrainDef?: number; fort?: number; unrestDef?: number; infantryTerrain?: number },
+  opts: { enemyTypes: readonly string[]; moraleF: number; terrainDef?: number; fort?: number; unrestDef?: number; infantryTerrain?: number; siege?: boolean },
 ): number {
   if (startTroops <= 0 || currentTroops <= 0) return 0;
   const faction = ctx.state.factions[factionId];
@@ -687,11 +703,45 @@ function computePower(
     const titleMult = u.title === 'rebel_militia' || u.title === 'rebel_garrison'
       ? (world.rebellion?.rebelCombatMultiplier ?? 0.25)
       : 1;
-    base += (u.troops / startTroops) * t[stat] * bonus * terrainUnit * titleMult;
+    // ★将领乘数：实战与 UI 预估共用 state.ts 的纯函数，保证"看到的战力 = 结算的战力"
+    const genMult = generalCombatMultiplier(world, u, stat, { siege: opts.siege === true });
+    base += (u.troops / startTroops) * t[stat] * bonus * terrainUnit * titleMult * genMult;
   }
   const scaled = base * currentTroops;
   const exponent = Math.pow(currentTroops / startTroops, world.combat.lanchesterExponent - 1);
   return scaled * exponent * opts.moraleF * laws * (opts.terrainDef ?? 1) * (opts.fort ?? 1) * (opts.unrestDef ?? 1);
+}
+
+/**
+ * 战报里的将领证据：逐部队列出乘数 + 按兵力加权的平均乘数。
+ * 有了名册（不可变配置）+ 这两组数字，任何人都能复算将领对战力的贡献。
+ */
+function generalEvidence(
+  world: WorldConfig,
+  ctx: ResolveContext,
+  unitIds: readonly UnitId[],
+  stat: 'attack' | 'defense',
+  siege: boolean,
+): {
+  list: Array<{ generalId: string; name: string; unitId: UnitId; multiplier: number }>;
+  multiplier: number;
+} {
+  const list: Array<{ generalId: string; name: string; unitId: UnitId; multiplier: number }> = [];
+  let weighted = 0;
+  let totalTroops = 0;
+  for (const uid of unitIds) {
+    const u = ctx.state.units[uid];
+    if (!u) continue;
+    const g = generalForUnit(world, u);
+    const m = generalCombatMultiplier(world, u, stat, { siege });
+    if (g) list.push({ generalId: g.id, name: g.name, unitId: uid, multiplier: m });
+    weighted += u.troops * m;
+    totalTroops += u.troops;
+  }
+  return {
+    list,
+    multiplier: totalTroops > 0 ? Math.round((weighted / totalTroops) * 10000) / 10000 : 1,
+  };
 }
 
 function applyAttackerLosses(ctx: ResolveContext, unitIds: readonly UnitId[], startTotal: number, remain: number, committed: number): void {

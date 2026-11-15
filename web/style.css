@@ -1356,3 +1356,25 @@ table.factions.hide-grudge td:nth-child(3) { display: none; }
 .hall-account.is-logged #accountWho { margin: 0; }
 .hall-account.is-logged .connect-actions { margin: 0; }
 .hall-account.is-logged #accountStatus { margin-left: auto; }
+
+/* ── 史料将领名册（右栏折叠面板） ── */
+.general-roster > summary { cursor: pointer; list-style: none; }
+.general-roster > summary::-webkit-details-marker { display: none; }
+.general-roster > summary::before { content: '\25B8'; margin-right: 7px; color: var(--faint); font-size: 10px; }
+.general-roster[open] > summary::before { content: '\25BE'; }
+.general-roster .panel-body { max-height: 340px; overflow-y: auto; }
+.roster-group { margin: 10px 0 6px; color: var(--faint); font-size: 11px; letter-spacing: .04em; }
+.roster-group:first-child { margin-top: 0; }
+.roster-card {
+  margin: 0 0 9px;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.015);
+}
+.roster-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.roster-effects { margin-top: 4px; color: var(--gold-bright); font-size: 11px; }
+.roster-deploy { margin-top: 3px; color: var(--faint); font-size: 10px; }
+.roster-trait { margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.roster-source { margin-top: 5px; color: var(--faint); font-size: 10px; }
+.detail-note--general { border-left-color: #c9a227; color: #d6c69b; }

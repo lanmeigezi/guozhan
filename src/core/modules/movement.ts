@@ -6,7 +6,7 @@
  * ★遍历邻居时一律用已排序的 adjacency，保证同输入同路径（平局时的选择也确定）。
  */
 import type { FactionId, GameState, RegionId, UnitDomain, UnitTypeDef, WorldConfig } from '../state.ts';
-import { getRelation, isAttackAdjacent, unitsIn } from '../state.ts';
+import { generalMovementBudget, getRelation, isAttackAdjacent, unitsIn } from '../state.ts';
 import type { AcceptedOrder, ResolveContext, RuleModule, StateSlice } from '../module.ts';
 
 interface MoveCmd {
@@ -268,8 +268,10 @@ export const movementModule: RuleModule = {
         ctx.reject(order, 'NO_LEGAL_PATH', `从 ${unit.regionId} 到 ${toRegion} 无合法路径（可能被敌国领土阻断或水师不在港口）`);
         continue;
       }
-      if (result.cost > typeDef.movement) {
-        ctx.reject(order, 'NO_LEGAL_PATH', `${typeDef.name} 移动力 ${typeDef.movement} 不足以抵达 ${toRegion}（需 ${result.cost}）`);
+      // ★将领行军加成与 legal.ts 的合法动作枚举共用同一函数，避免"UI 说能到、结算说到不了"
+      const budget = generalMovementBudget(world, unit, typeDef.movement);
+      if (result.cost > budget) {
+        ctx.reject(order, 'NO_LEGAL_PATH', `${typeDef.name} 移动力 ${budget}${budget > typeDef.movement ? `（含将领加成 +${budget - typeDef.movement}）` : ''} 不足以抵达 ${toRegion}（需 ${result.cost}）`);
         continue;
       }
       if (cmd.kind === 'attack') {

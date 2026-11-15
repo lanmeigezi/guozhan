@@ -35,6 +35,27 @@ export interface CombatExecution {
     readonly attackerBonus: number;
     readonly defenderBonus: number;
   };
+  /**
+   * 将领对这场战斗的乘数（逐部队列出，战报可复算）。
+   * 未启用将领系统的剧本 / 旧事件回放缺省整个字段。
+   */
+  readonly generals?: {
+    readonly attacker: readonly {
+      readonly generalId: string;
+      readonly name: string;
+      readonly unitId: UnitId;
+      readonly multiplier: number;
+    }[];
+    readonly defender: readonly {
+      readonly generalId: string;
+      readonly name: string;
+      readonly unitId: UnitId;
+      readonly multiplier: number;
+    }[];
+    /** 按投入兵力加权的平均乘数，供 UI 一行显示 */
+    readonly attackerMultiplier: number;
+    readonly defenderMultiplier: number;
+  };
   /** 本场战斗实际施加的地区动乱拆分（旧存档事件可能没有） */
   readonly unrest?: {
     readonly battle: number;
@@ -395,6 +416,18 @@ export const DomainEventSchema = z.discriminatedUnion('type', [
     degraded: z.boolean(),
   }).strict(),
 
+  /** 将领调任（只给当事方，避免把部署泄露给敌国） */
+  z.object({
+    type: z.literal('general_assigned'),
+    turn: z.number().int(),
+    factionId: z.string(),
+    generalId: z.string(),
+    generalName: z.string(),
+    unitId: z.string(),
+    fromUnitId: z.string(),
+    regionId: z.string(),
+  }).strict(),
+
   z.object({
     type: z.literal('match_ended'),
     turn: z.number().int(),
@@ -441,6 +474,7 @@ export const EVENT_VISIBILITY: Readonly<Record<DomainEventType, 'all' | 'owner' 
     advice_resolved: 'owner',
     alerts_raised: 'owner',
     narrative_chunk: 'owner',
+    general_assigned: 'owner',
     match_ended: 'all',
   });
 

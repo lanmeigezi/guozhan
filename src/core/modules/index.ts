@@ -19,6 +19,7 @@ import { grudgeModule } from './grudge.ts';
 import { slaveTradeModule } from './slavetrade.ts';
 import { rebellionModule } from './rebellion.ts';
 import { frontierModule } from './frontier.ts';
+import { generalsModule } from './generals.ts';
 
 const REGISTRY = new Map<string, RuleModule>([
   ['economy', economyModule],
@@ -31,6 +32,7 @@ const REGISTRY = new Map<string, RuleModule>([
   ['slavetrade', slaveTradeModule],
   ['rebellion', rebellionModule],
   ['frontier', frontierModule],
+  ['generals', generalsModule],
 ]);
 
 /** 内置模块 id（注册表会被插件扩展，这个常量只是"出厂自带"的快照） */

@@ -91,6 +91,13 @@ export const RejectionCode = {
   AI_COMMAND_BUDGET_EXCEEDED: 'AI_COMMAND_BUDGET_EXCEEDED',
   /** 该席位 token 预算已耗尽，本回合降级为纯确定性 */
   TOKEN_BUDGET_EXCEEDED: 'TOKEN_BUDGET_EXCEEDED',
+
+  /** 将领名册里没有这个人（或该剧本未启用将领系统） */
+  UNKNOWN_GENERAL: 'UNKNOWN_GENERAL',
+  /** 该将领不属于你的势力 */
+  GENERAL_NOT_OWNED: 'GENERAL_NOT_OWNED',
+  /** 将领已随原建制退场，不能再任命（不复活） */
+  GENERAL_NOT_IN_SERVICE: 'GENERAL_NOT_IN_SERVICE',
 } as const;
 
 export type RejectionCode = (typeof RejectionCode)[keyof typeof RejectionCode];
@@ -150,4 +157,7 @@ export const REJECTION_HTTP_STATUS: Readonly<Record<RejectionCode, number>> = Ob
   FRONTIER_NEEDS_NEXT_TURN: 422,
   AI_COMMAND_BUDGET_EXCEEDED: 422,
   TOKEN_BUDGET_EXCEEDED: 429,
+  UNKNOWN_GENERAL: 404,
+  GENERAL_NOT_OWNED: 403,
+  GENERAL_NOT_IN_SERVICE: 422,
 });

@@ -1,3 +1,13 @@
+# 将领系统（史料名册）· 2026-11-15
+
+新增**史料可考的战国将领系统**，仅启用于 `warring-states-full`；经典版 `warring-states` 是项目锁定的旧存档兼容基线（`contentHash` / `behaviorFingerprint=36775`），保持逐字不变，其余剧本亦不变。
+
+- **名册**：16 位真实将领（白起/王翦/司马错、廉颇/李牧/赵奢、吴起/庞涓/信陵君、孙膑/田单、乐毅/秦开、项燕/昭阳、暴鸢），七雄皆有；每人 2–3 条特征都带《史记》《战国策》篇名出处，韩国将才记载稀薄已明确标注。名册是不可变内容并进 contentHash，LLM 不得造人（依据 `docs/research/02-histrategy.md` 数值禁区）。
+- **规则**：将领挂在 `UnitState.generalId`，开局按 `assignedTo` 绑定；攻/守/攻城/士气/兵种专精/行军六个维度全部是确定性乘数，实战与 UI 预估共用 `state.ts` 的纯函数；攻城乘数只在攻方打有要塞目标时生效。战报证据新增 `generals` 可逐条复算。
+- **命令**：`assign_general` 调任，保证一人一军、不跨势力、不复活已退场将领；拒绝码 `UNKNOWN_GENERAL` / `GENERAL_NOT_OWNED` / `GENERAL_NOT_IN_SERVICE`。
+- **迷雾**：`Snapshot.generalRoster` 是公开史料但不含部署，谁带哪支部队只出现在按 `canSeeStacks()` 裁剪过的 stacks 里。右栏新增折叠的「史料将领」面板，区域详情显示将领与史料特征。
+- **验收**：新增 9 条回归 `tests/deterministic/generals.test.ts`；`npm run verify` **397/397**、`npm run build` 成功、`npm run smoke` PASS；协议副本 `protocol.browser.js` 已重生成。史料表与扩展方法见 `docs/08-将领系统与史料依据.md`。
+
 # guozhan 规则更新 · 叛乱冷却与战争民心 · 2026-11-13
 
 源码级规则调整（未重出 APK / 发布包；只改 git 仓库源码）。仅 grand-front 生效，旧剧本行为逐字不变。

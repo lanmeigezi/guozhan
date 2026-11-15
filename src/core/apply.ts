@@ -20,6 +20,7 @@ import type {
   UnitState,
   UnitId,
   UnitTitle,
+  GeneralId,
   RebellionState,
   RelationEntry,
   RngState,
@@ -117,6 +118,7 @@ interface MUnit {
   movedThisTurn: boolean;
   title?: UnitTitle;
   garrisonOnly?: boolean;
+  generalId?: GeneralId;
 }
 
 class Draft {
@@ -190,6 +192,7 @@ class Draft {
         movedThisTurn: u.movedThisTurn,
         ...(u.title !== undefined ? { title: u.title } : {}),
         ...(u.garrisonOnly === true ? { garrisonOnly: true } : {}),
+        ...(u.generalId !== undefined ? { generalId: u.generalId } : {}),
       };
     }
     const relations: Record<string, RelationEntry> = {};
@@ -455,7 +458,22 @@ export function resolveTurn(input: ApplyInput): TurnOutcome {
         else if (m.title !== undefined) u.title = m.title as UnitTitle;
         return;
       }
+      case 'set_unit_general': {
+        const u = draft.units.get(m.unitId);
+        if (!u) return;
+        if (m.generalId === null) {
+          delete u.generalId;
+          return;
+        }
+        // ★一名将领只带一军：先从其它部队摘掉同一个 id，避免调任出现"分身"
+        for (const other of draft.units.values()) {
+          if (other.id !== m.unitId && other.generalId === m.generalId) delete other.generalId;
+        }
+        u.generalId = m.generalId;
+        return;
+      }
       case 'destroy_unit': {
+        // 将领随建制消失且不复活：不把 generalId 迁移到任何新部队
         if (!draft.units.has(m.unitId)) return;
         draft.units.delete(m.unitId);
         return;

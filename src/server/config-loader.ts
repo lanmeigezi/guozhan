@@ -15,6 +15,10 @@ import type {
   FactionId,
   FrontierParams,
   GameState,
+  GeneralDef,
+  GeneralEffects,
+  GeneralId,
+  GeneralTrait,
   GovernanceParams,
   InfrastructureLevelDef,
   LawDef,
@@ -391,6 +395,90 @@ function parseFrontier(raw: any, label: string): FrontierParams {
   };
   assertNoHoles(parsed, label);
   return parsed;
+}
+
+/**
+ * 解析可选的将领名册（不可变内容）。
+ *
+ * ★只有显式声明 `knowledge.generalsFile` 的剧本才启用：旧剧本不读取、
+ *   不写进 contentHash、不往 world 里塞字段，行为与哈希逐字不变。
+ * ★effects 在这里一次性补全缺省值，运行时不必到处判空（也不需要 `?? 1` 这类逃逸口）。
+ */
+function parseGenerals(
+  raw: any,
+  label: string,
+  unitTypes: Readonly<Record<string, UnitTypeDef>>,
+  factionsDoc: any,
+): Record<GeneralId, GeneralDef> {
+  if (!raw || !Array.isArray(raw.generals)) throw new Error(`${label}.generals 必须是数组`);
+  const factionIds = new Set<string>((factionsDoc.factions as any[]).map((f) => String(f.id)));
+  const out: Record<GeneralId, GeneralDef> = {};
+  const usedUnits = new Set<string>();
+
+  const finite = (v: unknown, key: string, min: number, max: number): number => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < min || n > max) {
+      throw new Error(`${label}.${key} 必须在 [${min},${max}]，实得 ${String(v)}`);
+    }
+    return n;
+  };
+
+  for (const g of raw.generals as any[]) {
+    const id = String(g.id ?? '');
+    if (!/^[a-z0-9][a-z0-9_-]*$/.test(id)) throw new Error(`${label} 将领 id 非法：${String(g.id)}`);
+    if (out[id]) throw new Error(`${label} 将领 id 重复：${id}`);
+    const name = String(g.name ?? '');
+    if (!name) throw new Error(`${label}.${id}.name 不能为空`);
+    const factionId = String(g.factionId ?? '');
+    if (!factionIds.has(factionId)) throw new Error(`${label}.${id}.factionId '${factionId}' 不在本剧本势力表中`);
+    const assignedTo = String(g.assignedTo ?? '');
+    if (!assignedTo || usedUnits.has(assignedTo)) {
+      throw new Error(`${label}.${id}.assignedTo 缺失或与别的将领重复：${assignedTo}`);
+    }
+    usedUnits.add(assignedTo);
+    const source = String(g.source ?? '');
+    if (!source) throw new Error(`${label}.${id}.source 不能为空（史料出处是硬要求）`);
+    if (!Array.isArray(g.traits) || g.traits.length === 0) throw new Error(`${label}.${id}.traits 至少要有一条`);
+    const traits: GeneralTrait[] = (g.traits as any[]).map((t, i) => {
+      const text = String(t?.text ?? '');
+      const src = String(t?.source ?? '');
+      if (!text || !src) throw new Error(`${label}.${id}.traits[${i}] 缺 text 或 source`);
+      return { text, source: src };
+    });
+
+    const e = g.effects ?? {};
+    let unitAffinity: GeneralEffects['unitAffinity'] = null;
+    if (e.unitAffinity !== undefined && e.unitAffinity !== null) {
+      const typeId = String(e.unitAffinity.typeId ?? '');
+      if (!unitTypes[typeId]) throw new Error(`${label}.${id}.unitAffinity.typeId '${typeId}' 不在本剧本兵种表中`);
+      unitAffinity = {
+        typeId,
+        multiplier: finite(e.unitAffinity.multiplier, `${id}.unitAffinity.multiplier`, 1, 1.5),
+      };
+    }
+    const movementBonus = finite(e.movementBonus ?? 0, `${id}.movementBonus`, 0, 2);
+    if (!Number.isInteger(movementBonus)) throw new Error(`${label}.${id}.movementBonus 必须是整数`);
+    const effects: GeneralEffects = {
+      attackMultiplier: finite(e.attackMultiplier ?? 1, `${id}.attackMultiplier`, 0.5, 1.5),
+      defenseMultiplier: finite(e.defenseMultiplier ?? 1, `${id}.defenseMultiplier`, 0.5, 1.5),
+      siegeMultiplier: finite(e.siegeMultiplier ?? 1, `${id}.siegeMultiplier`, 1, 1.5),
+      moraleMultiplier: finite(e.moraleMultiplier ?? 1, `${id}.moraleMultiplier`, 0.8, 1.3),
+      movementBonus,
+      unitAffinity,
+    };
+    out[id] = {
+      id,
+      name,
+      factionId,
+      assignedTo,
+      source,
+      traits,
+      effects,
+      ...(g.title !== undefined ? { title: String(g.title) } : {}),
+    };
+  }
+  assertNoHoles(out, label);
+  return out;
 }
 
 /** 目录扫描发现剧本 */
@@ -777,6 +865,12 @@ export function loadScenario(scenarioId: string, rootSeed?: string, configRoot =
         `frontier(${scenarioId})`,
       )
     : undefined;
+  // ★可选：将领名册（史料）。解析要等 unitTypes / factions 装配完，故延后到下面。
+  const generalsDoc = knowledge['generalsFile'] !== undefined
+    ? readJson(resolveScenarioFile(
+        configRoot, scDir, knowledge['generalsFile'], '', 'generalsFile',
+      ))
+    : undefined;
 
   let fac: any;
   let regionsDoc: any;
@@ -848,6 +942,9 @@ export function loadScenario(scenarioId: string, rootSeed?: string, configRoot =
     };
   }
   const waterRoutes = parseWaterRoutes(regionsDoc.waterRoutes, regions);
+  const generals = generalsDoc !== undefined
+    ? parseGenerals(generalsDoc, `generals(${scenarioId})`, unitTypes, fac)
+    : undefined;
   const laws: Record<string, LawDef> = {};
   for (const l of lawsDoc.laws as any[]) {
     laws[l.id as string] = { id: l.id, name: l.name, effects: l.effects ?? {}, enactGold: l.enactGold ?? 0 };
@@ -875,6 +972,8 @@ export function loadScenario(scenarioId: string, rootSeed?: string, configRoot =
   if (slaveTrade !== undefined) hashInput['slaveTrade'] = slaveTrade;
   if (rebellion !== undefined) hashInput['rebellion'] = rebellion;
   if (frontier !== undefined) hashInput['frontier'] = frontier;
+  // ★只有启用将领系统的剧本才把名册放进哈希；改名册（含史料特征对应的数值）会让旧档 fail-closed
+  if (generals !== undefined) hashInput['generals'] = generals;
   const contentHash = sha256(stableStringify(hashInput));
 
   const world: WorldConfig = {
@@ -905,6 +1004,7 @@ export function loadScenario(scenarioId: string, rootSeed?: string, configRoot =
     ...(slaveTrade !== undefined ? { slaveTrade } : {}),
     ...(rebellion !== undefined ? { rebellion } : {}),
     ...(frontier !== undefined ? { frontier } : {}),
+    ...(generals !== undefined ? { generals } : {}),
     ...(Array.isArray(sc.engine?.moduleOrder) && sc.engine.moduleOrder.includes('statecraft')
       ? {
           capabilities: {
@@ -914,6 +1014,7 @@ export function loadScenario(scenarioId: string, rootSeed?: string, configRoot =
             ...(slaveTrade !== undefined ? { slaveTrade: true } : {}),
             ...(rebellion !== undefined ? { rebellion: true } : {}),
             ...(frontier !== undefined ? { frontier: true } : {}),
+            ...(generals !== undefined ? { generals: true } : {}),
           },
         }
       : {}),
@@ -987,6 +1088,20 @@ export function loadScenario(scenarioId: string, rootSeed?: string, configRoot =
       troops: n.garrison.troops,
       movedThisTurn: false,
     };
+  }
+
+  // ★开局按史料名册把将领绑到指定建制。校验放在装载期 fail-fast，
+  //   而不是等结算时才发现「白起挂在一支不存在的部队上」。
+  if (generals !== undefined) {
+    for (const g of Object.values(generals).sort((a, b) => (a.id < b.id ? -1 : 1))) {
+      const u = (unitState as Record<string, any>)[g.assignedTo];
+      if (!u) throw new Error(`generals(${scenarioId}).${g.id}.assignedTo '${g.assignedTo}' 不在初始部队表中`);
+      if (u.ownerId !== g.factionId) {
+        throw new Error(`generals(${scenarioId}).${g.id} 属于 ${g.factionId}，但 ${g.assignedTo} 归 ${String(u.ownerId)}`);
+      }
+      if (u.generalId) throw new Error(`generals(${scenarioId}) 部队 ${g.assignedTo} 被重复指派将领`);
+      u.generalId = g.id;
+    }
   }
 
   const relations: Record<string, any> = {};

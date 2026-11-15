@@ -163,6 +163,15 @@ export const ClaimRebellionCommandSchema = z
   })
   .strict();
 
+/** 将领调任：把本势力在编将领改派到另一支己方部队（一名将领只带一军） */
+export const AssignGeneralCommandSchema = z
+  .object({
+    kind: z.literal('assign_general'),
+    generalId: idSchema,
+    unitId: UnitIdSchema,
+  })
+  .strict();
+
 /** 开荒：在已有本方部队的空白地块完成基建 Lv1 并占领 */
 export const SettleRegionCommandSchema = z
   .object({
@@ -220,6 +229,7 @@ export const DomainCommandSchema = z.discriminatedUnion('kind', [
   TradeSlavesCommandSchema,
   ClaimRebellionCommandSchema,
   SettleRegionCommandSchema,
+  AssignGeneralCommandSchema,
   SendMessageCommandSchema,
   DiplomacyCommandSchema,
 ]);

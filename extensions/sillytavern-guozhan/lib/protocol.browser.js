@@ -2,7 +2,7 @@
  * protocol.browser.js —— ★生成文件，勿手改。
  * 单一真源：src/protocol/*.ts；生成器：tools/build-protocol-bundle.ts
  * 模式：full（full=zod schema 真身可运行时校验；fallback=纯数据表，无校验能力）
- * 源码指纹：sha256:f211a2e2cca9b0aca30fe9872757f92ab4fdb9a585ff364ddafc250437f5ce87
+ * 源码指纹：sha256:20d3bb00ee4e28fa618f75cbad9f539b4a03be3534f30498cb5c3cf406e08774
  * 同步闸门：tests/deterministic/deploy.test.ts 会核对产物与源码一致。
  */
 var __defProp = Object.defineProperty;
@@ -4134,6 +4134,11 @@ var ClaimRebellionCommandSchema = external_exports.object({
   kind: external_exports.literal("claim_rebellion"),
   regionId: RegionIdSchema
 }).strict();
+var AssignGeneralCommandSchema = external_exports.object({
+  kind: external_exports.literal("assign_general"),
+  generalId: idSchema,
+  unitId: UnitIdSchema
+}).strict();
 var SettleRegionCommandSchema = external_exports.object({
   kind: external_exports.literal("settle_region"),
   regionId: RegionIdSchema
@@ -4178,6 +4183,7 @@ var DomainCommandSchema = external_exports.discriminatedUnion("kind", [
   TradeSlavesCommandSchema,
   ClaimRebellionCommandSchema,
   SettleRegionCommandSchema,
+  AssignGeneralCommandSchema,
   SendMessageCommandSchema,
   DiplomacyCommandSchema
 ]);
@@ -4462,6 +4468,17 @@ var DomainEventSchema = external_exports.discriminatedUnion("type", [
     /** 模板兜底时为 true，提示这是降级产物而非 LLM 生成 */
     degraded: external_exports.boolean()
   }).strict(),
+  /** 将领调任（只给当事方，避免把部署泄露给敌国） */
+  external_exports.object({
+    type: external_exports.literal("general_assigned"),
+    turn: external_exports.number().int(),
+    factionId: external_exports.string(),
+    generalId: external_exports.string(),
+    generalName: external_exports.string(),
+    unitId: external_exports.string(),
+    fromUnitId: external_exports.string(),
+    regionId: external_exports.string()
+  }).strict(),
   external_exports.object({
     type: external_exports.literal("match_ended"),
     turn: external_exports.number().int(),
@@ -4498,6 +4515,7 @@ var EVENT_VISIBILITY = Object.freeze({
   advice_resolved: "owner",
   alerts_raised: "owner",
   narrative_chunk: "owner",
+  general_assigned: "owner",
   match_ended: "all"
 });
 
@@ -4582,7 +4600,13 @@ var RejectionCode = {
   /** AI 单回合命令数超出预算（aonw: invalid_ai_command_budget） */
   AI_COMMAND_BUDGET_EXCEEDED: "AI_COMMAND_BUDGET_EXCEEDED",
   /** 该席位 token 预算已耗尽，本回合降级为纯确定性 */
-  TOKEN_BUDGET_EXCEEDED: "TOKEN_BUDGET_EXCEEDED"
+  TOKEN_BUDGET_EXCEEDED: "TOKEN_BUDGET_EXCEEDED",
+  /** 将领名册里没有这个人（或该剧本未启用将领系统） */
+  UNKNOWN_GENERAL: "UNKNOWN_GENERAL",
+  /** 该将领不属于你的势力 */
+  GENERAL_NOT_OWNED: "GENERAL_NOT_OWNED",
+  /** 将领已随原建制退场，不能再任命（不复活） */
+  GENERAL_NOT_IN_SERVICE: "GENERAL_NOT_IN_SERVICE"
 };
 var ALL_REJECTION_CODES = Object.freeze(
   Object.values(RejectionCode)
@@ -4627,7 +4651,10 @@ var REJECTION_HTTP_STATUS = Object.freeze({
   REGION_CONTESTED: 422,
   FRONTIER_NEEDS_NEXT_TURN: 422,
   AI_COMMAND_BUDGET_EXCEEDED: 422,
-  TOKEN_BUDGET_EXCEEDED: 429
+  TOKEN_BUDGET_EXCEEDED: 429,
+  UNKNOWN_GENERAL: 404,
+  GENERAL_NOT_OWNED: 403,
+  GENERAL_NOT_IN_SERVICE: 422
 });
 
 // src/protocol/snapshot.ts
@@ -4693,6 +4720,10 @@ var ProjectedRegionSchema = external_exports.object({
       tier: ArmyTierSchema,
       /** 特殊头衔：奴隶贸易的「贼配军」、起义/守城民兵 */
       title: external_exports.enum(["bandit_conscript", "rebel_militia", "rebel_garrison"]).optional(),
+      /** 统率该建制的将领。★只在可见驻军里下发，敌方部署仍受迷雾保护 */
+      generalId: external_exports.string().optional(),
+      generalName: external_exports.string().optional(),
+      generalTitle: external_exports.string().optional(),
       /** 情报陈旧度：多少回合前看到的（0 = 本回合） */
       seenTurnsAgo: external_exports.number().int()
     }).strict()
@@ -4772,6 +4803,22 @@ var SelfReviewSchema = external_exports.object({
     maxCommands: external_exports.number().int()
   }).strict().nullable()
 }).strict();
+var GeneralRosterEntrySchema = external_exports.object({
+  id: external_exports.string(),
+  name: external_exports.string(),
+  title: external_exports.string().optional(),
+  factionId: external_exports.string(),
+  source: external_exports.string(),
+  traits: external_exports.array(external_exports.object({ text: external_exports.string(), source: external_exports.string() }).strict()),
+  effects: external_exports.object({
+    attackMultiplier: external_exports.number(),
+    defenseMultiplier: external_exports.number(),
+    siegeMultiplier: external_exports.number(),
+    moraleMultiplier: external_exports.number(),
+    movementBonus: external_exports.number().int(),
+    unitAffinity: external_exports.object({ typeId: external_exports.string(), multiplier: external_exports.number() }).strict().nullable()
+  }).strict()
+}).strict();
 var SnapshotSchema = external_exports.object({
   recipient: external_exports.string(),
   turn: external_exports.number().int(),
@@ -4783,6 +4830,8 @@ var SnapshotSchema = external_exports.object({
   stateId: external_exports.string(),
   regions: external_exports.array(ProjectedRegionSchema),
   factions: external_exports.array(ProjectedFactionSchema),
+  /** 未启用将领系统的剧本不下发该字段（旧客户端兼容） */
+  generalRoster: external_exports.array(GeneralRosterEntrySchema).optional(),
   alerts: external_exports.array(AlertSchema),
   /** 合法动作空间 —— LLM 的建议必须引用这里的 id（P10 锚定） */
   legalActions: external_exports.array(
@@ -4899,6 +4948,7 @@ export {
   AiArchetypeSchema,
   AlertSchema,
   ArmyTierSchema,
+  AssignGeneralCommandSchema,
   AttackCommandSchema,
   BuildInfrastructureCommandSchema,
   ClaimRebellionCommandSchema,
@@ -4912,6 +4962,7 @@ export {
   EVENT_VISIBILITY,
   FactionIdSchema,
   FortifyCommandSchema,
+  GeneralRosterEntrySchema,
   LegalActionSchema,
   MergeUnitsCommandSchema,
   MoveUnitsCommandSchema,
@@ -4936,4 +4987,4 @@ export {
   UnitIdSchema
 };
 
-export const PROTOCOL_SOURCE_SHA256 = "f211a2e2cca9b0aca30fe9872757f92ab4fdb9a585ff364ddafc250437f5ce87";
+export const PROTOCOL_SOURCE_SHA256 = "20d3bb00ee4e28fa618f75cbad9f539b4a03be3534f30498cb5c3cf406e08774";

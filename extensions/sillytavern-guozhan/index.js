@@ -74,6 +74,9 @@ const REJECTION_MESSAGES = {
     FRONTIER_NEEDS_NEXT_TURN: '部队本回合刚移动，需下一回合再开荒（派兵与开荒分两回合）',
     AI_COMMAND_BUDGET_EXCEEDED: 'AI 单回合命令数超出预算',
     TOKEN_BUDGET_EXCEEDED: '本席位 token 预算已耗尽，本回合降级为纯确定性结算（游戏照常，只是没有 AI 建议）',
+    UNKNOWN_GENERAL: '将领名册里没有这个人（或该剧本未启用将领系统）',
+    GENERAL_NOT_OWNED: '该将领属于别国，不能由你任命',
+    GENERAL_NOT_IN_SERVICE: '该将领已随原建制退场，不能再任命',
 };
 
 // 自检：文案表必须覆盖协议里的每一个拒绝码（deploy.test.ts 有同款闸门）

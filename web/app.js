@@ -363,6 +363,7 @@ function collectBattles(report) {
         attackerType: ev.attackerType ?? null,
         defenderTypes: Array.isArray(ev.defenderTypes) ? ev.defenderTypes : [],
         counters: ev.counters ?? null,
+        generals: ev.generals ?? null,
         unrest: ev.unrest ?? null,
         rounds: Array.isArray(ev.rounds) ? ev.rounds.length : 0,
         outcome: ev.outcome,
@@ -776,6 +777,7 @@ function applySnapshot(snap) {
   renderUnitCodex();
   renderBattleReport();
   renderDetail();
+  renderGeneralRoster();
   renderQueue();
   renderActions();
   renderTextMap();
@@ -1085,6 +1087,13 @@ function logEvent(event) {
         'is-danger',
       );
       break;
+    case 'general_assigned':
+      appendLog(
+        'order',
+        `${turnPrefix}调将：${event.generalName} 改统 ${regionName(event.regionId)} 之军（原建制 ${event.fromUnitId} → ${event.unitId}）。`,
+        '',
+      );
+      break;
     case 'rebellion_claimed':
       appendLog(
         'handshake',
@@ -1290,6 +1299,13 @@ function updateBattleHud(battle, index, total, phase, finalText = '') {
   if (battle.counters) {
     if (battle.counters.attackerBonus > 1) metaBits.push(`攻方克制 +${Math.round((battle.counters.attackerBonus - 1) * 100)}%`);
     if (battle.counters.defenderBonus > 1) metaBits.push(`守方克制 +${Math.round((battle.counters.defenderBonus - 1) * 100)}%`);
+  }
+  if (battle.generals) {
+    const names = (list) => (list ?? []).map((g) => `${g.name} ×${g.multiplier}`).join('、');
+    const atkGenerals = names(battle.generals.attacker);
+    const defGenerals = names(battle.generals.defender);
+    if (atkGenerals) metaBits.push(`攻方将领 ${atkGenerals}`);
+    if (defGenerals) metaBits.push(`守方将领 ${defGenerals}`);
   }
   if (battle.unrest) {
     const u = battle.unrest;
@@ -1903,6 +1919,60 @@ function renderAlerts() {
 // 渲染：区域详情
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * 史料将领名册（右栏折叠面板）。
+ * ★名册是公开史料，但**部署不是**：只从当前快照里可见的 stacks 反查，
+ *   敌方未侦察区域一律显示「部署未明」，不给玩家绕过战争迷雾的通道。
+ */
+function renderGeneralRoster() {
+  const panel = $('generalRosterPanel');
+  const box = $('generalRoster');
+  if (!panel || !box) return;
+  const roster = Array.isArray(S.snapshot?.generalRoster) ? S.snapshot.generalRoster : [];
+  panel.hidden = roster.length === 0;
+  $('generalRosterCount').textContent = `${roster.length} 位`;
+  clearNode(box);
+  if (roster.length === 0) return;
+
+  const posted = new Map();
+  for (const region of S.snapshot.regions ?? []) {
+    for (const st of region.stacks ?? []) {
+      if (!st.generalId) continue;
+      posted.set(st.generalId, `${region.name ?? regionName(region.id)} · ${st.typeName} ${formatTroops(st.troops)}`);
+    }
+  }
+  const section = (title, list) => {
+    if (list.length === 0) return;
+    box.append(h('div', { class: 'roster-group', text: title }));
+    for (const g of list) {
+      const e = g.effects;
+      const bits = [];
+      if (e.attackMultiplier !== 1) bits.push(`攻 ×${e.attackMultiplier}`);
+      if (e.defenseMultiplier !== 1) bits.push(`守 ×${e.defenseMultiplier}`);
+      if (e.siegeMultiplier > 1) bits.push(`攻城 ×${e.siegeMultiplier}`);
+      if (e.moraleMultiplier !== 1) bits.push(`士气 ×${e.moraleMultiplier}`);
+      if (e.movementBonus > 0) bits.push(`行军 +${e.movementBonus}`);
+      if (e.unitAffinity) bits.push(`${e.unitAffinity.typeId} ×${e.unitAffinity.multiplier}`);
+      const card = h('div', { class: 'roster-card' });
+      card.append(h('div', { class: 'roster-head' },
+        h('b', { text: g.name }),
+        g.title ? h('span', { class: 'hint', text: g.title }) : null,
+        h('span', { class: 'tag', text: factionName(g.factionId) }),
+      ));
+      card.append(h('div', { class: 'roster-effects', text: bits.join(' · ') || '无额外加成' }));
+      const deploy = posted.get(g.id);
+      card.append(h('div', { class: 'roster-deploy', text: deploy ? `现统：${deploy}` : '部署未明（未侦察）' }));
+      for (const t of g.traits) {
+        card.append(h('div', { class: 'roster-trait', text: `· ${t.text}`, title: t.source }));
+      }
+      card.append(h('div', { class: 'roster-source', text: `出处：${g.source}` }));
+      box.append(card);
+    }
+  };
+  section('我方将领', roster.filter((g) => g.factionId === S.selfId));
+  section('列国将领', roster.filter((g) => g.factionId !== S.selfId));
+}
+
 function renderDetail() {
   const box = $('regionDetail');
   const vis = $('regionVis');
@@ -2095,20 +2165,41 @@ function renderDetail() {
       box.append(h('div', { class: 'detail-note', text: '无驻军。' }));
     } else {
       const list = h('ul', { class: 'stack-list' });
+      const rosterById = new Map((S.snapshot?.generalRoster ?? []).map((g) => [g.id, g]));
       for (const st of stacks) {
         const stDot = h('i', { class: 'faction-dot' });
         stDot.style.background = factionColor(st.ownerId);
         stDot.style.color = factionColor(st.ownerId);
+        const gen = st.generalId ? rosterById.get(st.generalId) : null;
         list.append(h('li', {},
           h('span', { class: 'st-left' },
             stDot,
             h('span', { text: st.typeName }),
             st.title ? h('span', { class: `tag ${st.title === 'bandit_conscript' ? 'red' : 'gold'}`, text: UNIT_TITLE_LABEL[st.title] ?? st.title }) : null,
+            st.generalName ? h('span', {
+              class: 'tag gold',
+              text: st.generalName,
+              title: `${st.generalTitle ?? '将领'}｜${gen?.source ?? '史料'}`,
+            }) : null,
           ),
           h('span', { class: 'st-troops', text: formatTroops(st.troops), title: `${armyTierLabel(st.tier)} · ${factionName(st.ownerId)}${st.title ? ` · ${UNIT_TITLE_LABEL[st.title] ?? st.title}` : ''}` }),
         ));
       }
       box.append(list);
+      for (const st of stacks) {
+        const gen = st.generalId ? rosterById.get(st.generalId) : null;
+        if (!gen) continue;
+        const e = gen.effects;
+        const bits = [`攻 ×${e.attackMultiplier}`, `守 ×${e.defenseMultiplier}`];
+        if (e.siegeMultiplier > 1) bits.push(`攻城 ×${e.siegeMultiplier}`);
+        if (e.movementBonus > 0) bits.push(`行军 +${e.movementBonus}`);
+        if (e.unitAffinity) bits.push(`${e.unitAffinity.typeId} ×${e.unitAffinity.multiplier}`);
+        box.append(h('div', {
+          class: 'detail-note detail-note--general',
+          text: `将领 ${gen.name}${gen.title ? `（${gen.title}）` : ''}｜${bits.join('、')}；` +
+            `${gen.traits.map((t) => t.text).join('；')}。出处：${gen.source}`,
+        }));
+      }
       if (stacks.some((s) => s.title === 'bandit_conscript')) {
         box.append(h('div', {
           class: 'detail-note detail-note--danger',

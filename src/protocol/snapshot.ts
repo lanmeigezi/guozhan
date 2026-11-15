@@ -95,6 +95,10 @@ export const ProjectedRegionSchema = z
             tier: ArmyTierSchema,
             /** 特殊头衔：奴隶贸易的「贼配军」、起义/守城民兵 */
             title: z.enum(['bandit_conscript', 'rebel_militia', 'rebel_garrison']).optional(),
+            /** 统率该建制的将领。★只在可见驻军里下发，敌方部署仍受迷雾保护 */
+            generalId: z.string().optional(),
+            generalName: z.string().optional(),
+            generalTitle: z.string().optional(),
             /** 情报陈旧度：多少回合前看到的（0 = 本回合） */
             seenTurnsAgo: z.number().int(),
           })
@@ -206,6 +210,34 @@ export const SelfReviewSchema = z
  * 拓扑文本比 JSON 坐标省一个数量级 token，且对 LLM 更有用。
  * 网页面板要画地图时用 config 里另配的 x/y，与本字段无关。
  */
+/**
+ * 史料将领名册（只给展示层）。
+ * ★名册是公开史料，**不含任何当前部署**；谁带哪支部队只出现在按迷雾裁剪过的 stacks 里。
+ */
+export const GeneralRosterEntrySchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    title: z.string().optional(),
+    factionId: z.string(),
+    source: z.string(),
+    traits: z.array(z.object({ text: z.string(), source: z.string() }).strict()),
+    effects: z
+      .object({
+        attackMultiplier: z.number(),
+        defenseMultiplier: z.number(),
+        siegeMultiplier: z.number(),
+        moraleMultiplier: z.number(),
+        movementBonus: z.number().int(),
+        unitAffinity: z
+          .object({ typeId: z.string(), multiplier: z.number() })
+          .strict()
+          .nullable(),
+      })
+      .strict(),
+  })
+  .strict();
+
 export const SnapshotSchema = z
   .object({
     recipient: z.string(),
@@ -218,6 +250,8 @@ export const SnapshotSchema = z
     stateId: z.string(),
     regions: z.array(ProjectedRegionSchema),
     factions: z.array(ProjectedFactionSchema),
+    /** 未启用将领系统的剧本不下发该字段（旧客户端兼容） */
+    generalRoster: z.array(GeneralRosterEntrySchema).optional(),
     alerts: z.array(AlertSchema),
     /** 合法动作空间 —— LLM 的建议必须引用这里的 id（P10 锚定） */
     legalActions: z.array(

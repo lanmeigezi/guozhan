@@ -1,0 +1,213 @@
+{
+  "$comment": "战国将领名册（不可变内容）。★只收史料可考的真实人物，不虚构武将——依据 docs/research/02-histrategy.md 记下的 Histrategy 数值禁区「不要凭空创造新的武将或势力」。traits 是史书记载的概括（非逐字引文），source 给出可核查篇名；韩国将才记载稀薄，仅收 1 位并明确标注。effects 全部是确定性乘数/加数，由核心裁决，LLM 不得修改。",
+  "generals": [
+    {
+      "id": "baiqi",
+      "name": "白起",
+      "title": "武安君",
+      "factionId": "qin",
+      "assignedTo": "u_qin_1",
+      "source": "《史记·白起王翦列传》",
+      "traits": [
+        { "text": "伊阙、鄢郢、长平皆以野战歼敌决胜，太史公称其「料敌合变，出奇无穷」", "source": "《史记·白起王翦列传》" },
+        { "text": "长平尽坑赵降卒，攻势极锐而收人心不足", "source": "《史记·白起王翦列传》" }
+      ],
+      "effects": { "attackMultiplier": 1.18, "defenseMultiplier": 0.96, "moraleMultiplier": 1.05 }
+    },
+    {
+      "id": "wangjian",
+      "name": "王翦",
+      "title": "频阳东乡人",
+      "factionId": "qin",
+      "assignedTo": "u_qin_3",
+      "source": "《史记·白起王翦列传》",
+      "traits": [
+        { "text": "请六十万众伐楚，坚壁养锐、待敌懈而后击，遂破楚灭燕", "source": "《史记·白起王翦列传》" },
+        { "text": "善用优势兵力徐图进取，长于破坚城", "source": "《史记·白起王翦列传》" }
+      ],
+      "effects": { "attackMultiplier": 1.08, "defenseMultiplier": 1.08, "siegeMultiplier": 1.2, "moraleMultiplier": 1.04 }
+    },
+    {
+      "id": "simacuo",
+      "name": "司马错",
+      "title": "秦客卿",
+      "factionId": "qin",
+      "assignedTo": "u_qin_4",
+      "source": "《史记·张仪列传》附、《史记·秦本纪》",
+      "traits": [
+        { "text": "与张仪廷争论伐蜀，主张「得其地足以广国，取其财足以富民」，遂定巴蜀", "source": "《史记·张仪列传》" },
+        { "text": "长于远略拓地与长途进兵", "source": "《史记·秦本纪》" }
+      ],
+      "effects": { "attackMultiplier": 1.06, "movementBonus": 1 }
+    },
+    {
+      "id": "limu",
+      "name": "李牧",
+      "title": "赵北边良将",
+      "factionId": "zhao",
+      "assignedTo": "u_zhao_1",
+      "source": "《史记·廉颇蔺相如列传》附李牧传",
+      "traits": [
+        { "text": "居代雁门备匈奴，谨烽火、习骑射，后大破单于十余万骑", "source": "《史记·廉颇蔺相如列传》附李牧传" },
+        { "text": "肥之战、番吾之战再却秦军，攻守俱长", "source": "《史记·赵世家》" }
+      ],
+      "effects": { "defenseMultiplier": 1.1, "moraleMultiplier": 1.05, "unitAffinity": { "typeId": "cavalry", "multiplier": 1.25 } }
+    },
+    {
+      "id": "lianpo",
+      "name": "廉颇",
+      "title": "信平君",
+      "factionId": "zhao",
+      "assignedTo": "u_zhao_2",
+      "source": "《史记·廉颇蔺相如列传》",
+      "traits": [
+        { "text": "长平坚壁不出、以逸待劳拒秦，秦数挑战不应", "source": "《史记·廉颇蔺相如列传》" },
+        { "text": "老成持重，治军能安众", "source": "《史记·廉颇蔺相如列传》" }
+      ],
+      "effects": { "defenseMultiplier": 1.22, "moraleMultiplier": 1.06 }
+    },
+    {
+      "id": "zhaoshe",
+      "name": "赵奢",
+      "title": "马服君",
+      "factionId": "zhao",
+      "assignedTo": "u_zhao_3",
+      "source": "《史记·廉颇蔺相如列传》附赵奢传",
+      "traits": [
+        { "text": "阏与之战卷甲疾行二日一夜，据北山者胜，遂解阏与之围", "source": "《史记·廉颇蔺相如列传》附赵奢传" },
+        { "text": "「两鼠斗于穴中，将勇者胜」——狭路争先、疾行突击", "source": "《史记·廉颇蔺相如列传》附赵奢传" }
+      ],
+      "effects": { "attackMultiplier": 1.1, "movementBonus": 1, "moraleMultiplier": 1.04 }
+    },
+    {
+      "id": "wuqi",
+      "name": "吴起",
+      "title": "魏西河守",
+      "factionId": "wei",
+      "assignedTo": "u_wei_1",
+      "source": "《史记·孙子吴起列传》",
+      "traits": [
+        { "text": "为魏文侯将，拔秦五城，守西河而秦兵不敢东乡", "source": "《史记·孙子吴起列传》" },
+        { "text": "与士卒最下者同衣食、卧不设席、行不骑乘，创魏武卒之选", "source": "《史记·孙子吴起列传》" }
+      ],
+      "effects": { "defenseMultiplier": 1.15, "moraleMultiplier": 1.12, "attackMultiplier": 1.05 }
+    },
+    {
+      "id": "pangjuan",
+      "name": "庞涓",
+      "title": "魏将军",
+      "factionId": "wei",
+      "assignedTo": "u_wei_2",
+      "source": "《史记·孙子吴起列传》附孙膑传",
+      "traits": [
+        { "text": "与孙膑同门而嫉其能，桂陵、马陵两役皆中诱敌之计", "source": "《史记·孙子吴起列传》附孙膑传" },
+        { "text": "马陵道狭，弃步军率轻锐倍日并行，终败死", "source": "《史记·孙子吴起列传》附孙膑传" }
+      ],
+      "effects": { "attackMultiplier": 1.12, "defenseMultiplier": 0.9, "movementBonus": 1 }
+    },
+    {
+      "id": "xinling",
+      "name": "魏无忌",
+      "title": "信陵君",
+      "factionId": "wei",
+      "assignedTo": "u_wei_3",
+      "source": "《史记·魏公子列传》",
+      "traits": [
+        { "text": "窃符夺晋鄙军救赵，却秦存赵", "source": "《史记·魏公子列传》" },
+        { "text": "率五国兵破秦军于河外，乘胜逐至函谷关", "source": "《史记·魏公子列传》" }
+      ],
+      "effects": { "attackMultiplier": 1.08, "defenseMultiplier": 1.1, "moraleMultiplier": 1.08 }
+    },
+    {
+      "id": "sunbin",
+      "name": "孙膑",
+      "title": "齐军师",
+      "factionId": "qi",
+      "assignedTo": "u_qi_1",
+      "source": "《史记·孙子吴起列传》附孙膑传",
+      "traits": [
+        { "text": "围魏救赵，批亢捣虚、攻其必救，桂陵大破魏军", "source": "《史记·孙子吴起列传》附孙膑传" },
+        { "text": "马陵减灶示弱诱庞涓入伏", "source": "《史记·孙子吴起列传》附孙膑传" }
+      ],
+      "effects": { "attackMultiplier": 1.12, "movementBonus": 1, "moraleMultiplier": 1.05 }
+    },
+    {
+      "id": "tiandan",
+      "name": "田单",
+      "title": "齐安平君",
+      "factionId": "qi",
+      "assignedTo": "u_qi_3",
+      "source": "《史记·田单列传》",
+      "traits": [
+        { "text": "即墨孤城拒燕五年，以反间去乐毅、以火牛阵夜袭破骑劫", "source": "《史记·田单列传》" },
+        { "text": "尽复齐七十余城，守中求反攻", "source": "《史记·田单列传》" }
+      ],
+      "effects": { "defenseMultiplier": 1.2, "attackMultiplier": 1.1, "moraleMultiplier": 1.08 }
+    },
+    {
+      "id": "yueyi",
+      "name": "乐毅",
+      "title": "燕昌国君",
+      "factionId": "yan",
+      "assignedTo": "u_yan_2",
+      "source": "《史记·乐毅列传》",
+      "traits": [
+        { "text": "合燕、秦、韩、赵、魏五国之兵伐齐，济西一战破齐", "source": "《史记·乐毅列传》" },
+        { "text": "留徇齐城五岁，下齐七十余城，独莒、即墨未下", "source": "《史记·乐毅列传》" }
+      ],
+      "effects": { "attackMultiplier": 1.1, "siegeMultiplier": 1.18, "moraleMultiplier": 1.05 }
+    },
+    {
+      "id": "qinkai",
+      "name": "秦开",
+      "title": "燕将",
+      "factionId": "yan",
+      "assignedTo": "u_yan_1",
+      "source": "《史记·匈奴列传》",
+      "traits": [
+        { "text": "为质于胡，尽得胡情；归而袭破东胡，却地千余里", "source": "《史记·匈奴列传》" },
+        { "text": "燕由是置上谷、渔阳、右北平、辽西、辽东郡", "source": "《史记·匈奴列传》" }
+      ],
+      "effects": { "defenseMultiplier": 1.08, "unitAffinity": { "typeId": "cavalry", "multiplier": 1.2 }, "movementBonus": 1 }
+    },
+    {
+      "id": "xiangyan",
+      "name": "项燕",
+      "title": "楚将",
+      "factionId": "chu",
+      "assignedTo": "u_chu_1",
+      "source": "《史记·白起王翦列传》、《史记·秦始皇本纪》",
+      "traits": [
+        { "text": "李信以二十万众伐楚，项燕尾随三日三夜不顿舍，大破秦军、入两壁杀七都尉", "source": "《史记·白起王翦列传》" },
+        { "text": "楚南公曰「楚虽三户，亡秦必楚」，项氏世为楚将", "source": "《史记·项羽本纪》" }
+      ],
+      "effects": { "attackMultiplier": 1.1, "defenseMultiplier": 1.12, "moraleMultiplier": 1.06 }
+    },
+    {
+      "id": "zhaoyang",
+      "name": "昭阳",
+      "title": "楚令尹、上柱国",
+      "factionId": "chu",
+      "assignedTo": "u_chu_2",
+      "source": "《史记·楚世家》、《战国策·齐策》",
+      "traits": [
+        { "text": "楚怀王六年将兵攻魏，破之于襄陵，得八邑", "source": "《史记·楚世家》" },
+        { "text": "「画蛇添足」之典即出昭阳伐齐之役，见其用兵知止", "source": "《战国策·齐策二》" }
+      ],
+      "effects": { "attackMultiplier": 1.06, "defenseMultiplier": 1.08 }
+    },
+    {
+      "id": "baoyuan",
+      "name": "暴鸢",
+      "title": "韩将",
+      "factionId": "han",
+      "assignedTo": "u_han_1",
+      "source": "《史记·韩世家》（记载稀薄）",
+      "traits": [
+        { "text": "韩釐王时韩使暴鸢救魏，为秦所败，鸢走开封", "source": "《史记·韩世家》、《史记·魏世家》" },
+        { "text": "★韩国将才可确证的记载远少于六国，本条仅据救魏一役，特征取「赴援守御」而非战功", "source": "史料稀薄，见 docs/08-将领系统与史料依据.md" }
+      ],
+      "effects": { "defenseMultiplier": 1.06, "moraleMultiplier": 1.02 }
+    }
+  ]
+}

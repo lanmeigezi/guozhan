@@ -14,7 +14,8 @@
       "movement",
       "formation",
       "combat",
-      "governance"
+      "governance",
+      "generals"
     ],
     "behaviorFingerprint": 2
   },
@@ -87,7 +88,8 @@
     "economyFile": "../../rules/economy.json",
     "movementFile": "../../rules/movement.json",
     "alertsFile": "../../rules/alerts.json",
-    "governanceFile": "../../rules/governance.json"
+    "governanceFile": "../../rules/governance.json",
+    "generalsFile": "../warring-states/generals.json"
   },
   "victory": {
     "conquestRegionsRatio": 0.6,

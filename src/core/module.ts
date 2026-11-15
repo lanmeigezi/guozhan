@@ -11,6 +11,7 @@
 import type {
   FactionId,
   GameState,
+  GeneralId,
   InfrastructureLevel,
   RebellionState,
   RegionId,
@@ -42,6 +43,7 @@ export type StateSlice =
   | 'units.regionId'
   | 'units.typeId'
   | 'units.troops'
+  | 'units.generalId'
   | 'relations';
 
 /** 已被核心接受、可以进入结算的命令 */
@@ -78,6 +80,8 @@ export type Mutation =
   | { readonly op: 'add_unit_troops'; readonly unitId: UnitId; readonly delta: number; readonly reason: string }
   | { readonly op: 'spawn_unit'; readonly unitId: UnitId; readonly ownerId: FactionId; readonly regionId: RegionId; readonly typeId: string; readonly troops: number; readonly movedThisTurn?: boolean; readonly title?: string; readonly garrisonOnly?: boolean }
   | { readonly op: 'set_unit_garrison'; readonly unitId: UnitId; readonly garrisonOnly: boolean; readonly title?: string | null }
+  /** 将领调任：generalId=null 表示卸任；核心保证一名将领只带一军 */
+  | { readonly op: 'set_unit_general'; readonly unitId: UnitId; readonly generalId: GeneralId | null }
   | { readonly op: 'destroy_unit'; readonly unitId: UnitId; readonly reason: string }
   /** initiator：进入 war 时的发动方，核心据此记宣战民心账；离开 war 时清空账本 */
   | { readonly op: 'set_relation'; readonly a: FactionId; readonly b: FactionId; readonly kind: string; readonly initiator?: FactionId }
