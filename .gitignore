@@ -55,3 +55,8 @@ Thumbs.db
 
 # git bundle 交付包（生成物，不进版本库）
 *.bundle
+
+# ===== 三端客户端的 WebView 资源：从 board-games 同步，不重复入库 =====
+clients/android/app/src/main/assets/www/
+clients/ios/BoardGames/www/
+clients/harmony/entry/src/main/resources/rawfile/www/

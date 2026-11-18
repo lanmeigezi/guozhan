@@ -1,3 +1,14 @@
+# 三端蓝牙联机适配 · 2026-11-18
+
+调研结论：**没有**现成的 iOS + Android + HarmonyOS 三端蓝牙**多人联机**库可直接用。blue-falcon / flutter_blue_plus_ohos / react-native-ble-plx 都是 BLE Central-only（无 GATT Server/广播），Apple Multipeer 与 Google Nearby 都不到三端；iOS 不用 MFi 无法跑现有 APK 的 SPP/RFCOMM。因此自研 BLE GATT 传输层，WebView 资源逐字节不变。
+
+- **协议**：`docs/09-跨平台蓝牙联机协议.md` 固定 Service/RX/TX UUID、channelId、分片与回调；`window.UnoBtAndroid` 16 个方法与六个 `UnoBtOn*` 回调三端一致，LLM Key 仍只在进程内存。
+- **Android**：新增 `BtTransport` 接口 + `BleTransport`（主机 Peripheral / 客机 Central）、BLE 扫描选择器与模式开关；`release/uno-bt-ble-debug.apk` 已用 JDK17 + Gradle 8.9 编译，APK 内确认含 BLE 类与广播权限。
+- **iOS / HarmonyOS**：`clients/ios`（SwiftUI + WKWebView + CoreBluetooth + XcodeGen）与 `clients/harmony`（ArkTS WebView + `@ohos.bluetooth.ble`）工程源码已生成；**本机无 macOS/Xcode 与 DevEco，未编译、未真机验证**，交付源码与编译说明。
+- **验证**：新增零依赖静态闸门 `tests/deterministic/ble-protocol.test.ts`（UUID/桥方法/回调/资源同步/无 SPP）；`npm run verify` 全绿。WebView 资源同步脚本 `clients/sync-assets.mjs`；三端工程说明见 `clients/README.md`。
+
+**未测项**：iOS/HarmonyOS 真机编译、权限弹窗、BLE 分片吞吐、断线重连与三端交叉互通；上真机前按 `docs/09` §4.2 逐项补测。
+
 # 将领系统（史料名册）· 2026-11-15
 
 新增**史料可考的战国将领系统**，仅启用于 `warring-states-full`；经典版 `warring-states` 是项目锁定的旧存档兼容基线（`contentHash` / `behaviorFingerprint=36775`），保持逐字不变，其余剧本亦不变。

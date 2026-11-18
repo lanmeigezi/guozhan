@@ -1,0 +1,10 @@
+{
+  "app": {
+    "bundleName": "com.example.boardgames",
+    "vendor": "example",
+    "versionCode": 1000000,
+    "versionName": "1.27.0",
+    "icon": "$media:app_icon",
+    "label": "$string:app_name"
+  }
+}

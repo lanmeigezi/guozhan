@@ -1,0 +1,28 @@
+name: BoardGames
+options:
+  bundleIdPrefix: com.example.boardgames
+  deploymentTarget: "16.0"
+  xcodeVersion: "15.0"
+packages: {}
+targets:
+  BoardGames:
+    type: application
+    platform: iOS
+    sources:
+      - path: BoardGames
+        excludes:
+          - "www/**"
+    resources:
+      - path: BoardGames/www
+    info:
+      path: BoardGames/Info.plist
+      properties:
+        CFBundleDisplayName: 桌游合集
+        UIRequiredDeviceCapabilities:
+          - arm64
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.boardgames
+        SWIFT_VERSION: 5.9
+        TARGETED_DEVICE_FAMILY: "1,2"
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
