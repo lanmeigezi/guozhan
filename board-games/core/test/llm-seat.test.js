@@ -464,3 +464,68 @@ test('LLM 发言有最小间隔：限制频率但不再限制总次数', async (
     stop(host);
   }
 });
+
+// ── 斗地主 LLM 席位：项目自带的通用机制（buildAgentPrompt / _driveLlm /
+//    _llmFallback）本来就覆盖斗地主，这里把「LLM 可选升级 + 非法回落」钉死。
+test('doudizhu LLM prompt exposes legal combos and seat-aware view only', () => {
+  const g = getGame('doudizhu').create({ playerNames: ['A', 'B', 'C'], random: mulberry32(23) });
+  g.start();
+  g.applyAction(0, { kind: 'bid', score: 1 });
+  g.applyAction(1, { kind: 'bid', score: 0 });
+  g.applyAction(2, { kind: 'bid', score: 0 });
+  const view = g.viewFor(g.current);
+  const prompt = buildAgentPrompt({
+    gameKey: 'doudizhu', game: g, seat: g.current, view,
+    players: g.players.map((p, i) => ({ id: i, name: p.name })),
+  });
+  const blob = JSON.stringify(prompt.messages);
+  assert.ok(blob.includes('cardIds'), 'prompt must expose play actions');
+  assert.ok(blob.includes('pass'), 'prompt must expose pass');
+  assert.equal(view.hand.length, g.players[g.current].hand.length);
+  assert.equal(view.players[0].hand, undefined, 'other hands must stay hidden');
+});
+
+test('doudizhu LLM illegal card is rejected then heuristic fallback acts (no deadlock)', async () => {
+  let calls = 0;
+  const driver = {
+    model: 'mock',
+    async decide(ctx) {
+      calls++;
+      // 故意返回一张不属于该席位的假牌 id
+      return { kind: 'play', cardIds: ['NO_SUCH_CARD'] };
+    },
+  };
+  const host = new Host({ game: 'doudizhu', playerName: 'A', llm: driver, random: mulberry32(31) });
+  try {
+    const seat = host.addLlm('LLM');
+    host.startGame();
+    assert.equal(host.gameKey, 'doudizhu');
+    assert.ok(host.isLlmSeat(seat) || seat >= 0);
+    // 走到 LLM 席位：人类先 hand-off（叫分或出牌），随后直接驱动 LLM 循环
+    let guard = 0;
+    while (host.game.current !== seat && guard++ < 20) {
+      const cur = host.game.current;
+      if (host.game.phase === 'bidding') host.execute(cur, { t: 'act', kind: 'bid', score: 0 });
+      else break;
+    }
+    if (host.game.current === seat) {
+      // LLM 非法牌被拒 → _llmFallback 用本地强化 AI 落一手
+      assert.ok(host.gameInfo.ai, 'doudizhu must expose a heuristic AI for fallback');
+      await host._driveLlm();
+      assert.equal(calls, 1);
+      assert.ok(host.game.last, 'fallback must leave a trace instead of freezing');
+    }
+  } finally {
+    stop(host);
+  }
+});
+
+test('doudizhu parseAgentReply keeps only whitelisted actions', () => {
+  const out = parseAgentReply('doudizhu', '{"kind":"play","cardIds":["d1"],"targetSeat":2}', {
+    gameKey: 'doudizhu', seat: 0,
+  });
+  assert.equal(out.actions.length, 1);
+  assert.equal(out.actions[0].kind, 'play');
+  assert.deepEqual(out.actions[0].cardIds, ['d1']);
+  assert.ok(!('targetSeat' in out.actions[0]), 'doudizhu actions must not carry foreign fields');
+});

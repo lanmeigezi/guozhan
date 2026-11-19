@@ -47,7 +47,19 @@ export const MONOPOLY_BOARD = Object.freeze([
   { i: 21, kind: 'property', name: '长乐宫', group: 'G', price: 320, rent: 28, houseCost: 200 },
   { i: 22, kind: 'property', name: '大明宫', group: 'H', price: 350, rent: 30, houseCost: 200 },
   { i: 23, kind: 'property', name: '兴庆宫', group: 'H', price: 400, rent: 35, houseCost: 200 },
+  // ── 扩充区（追加而非插入，保持 0-23 的既有索引与旧存档/测试兼容） ──
+  { i: 24, kind: 'railroad', name: '东关驿站', group: 'R', price: 150, rent: 25 },
+  { i: 25, kind: 'utility', name: '官营盐铁', group: 'U', price: 130, rent: 4 },
+  { i: 26, kind: 'railroad', name: '西市驿站', group: 'R', price: 150, rent: 25 },
+  { i: 27, kind: 'chance', name: '机会' },
+  { i: 28, kind: 'railroad', name: '南郊驿站', group: 'R', price: 150, rent: 25 },
+  { i: 29, kind: 'utility', name: '官营织造', group: 'U', price: 130, rent: 4 },
+  { i: 30, kind: 'railroad', name: '北门驿站', group: 'R', price: 150, rent: 25 },
+  { i: 31, kind: 'chance', name: '机会' },
 ]);
+
+// 铁路/公用事业也属于可购买资产
+const ASSET_KINDS = new Set(['property', 'railroad', 'utility']);
 
 const BOARD_SIZE = MONOPOLY_BOARD.length;
 
@@ -55,7 +67,7 @@ const BOARD_SIZE = MONOPOLY_BOARD.length;
 const GROUP_TILES = (() => {
   const map = {};
   for (const t of MONOPOLY_BOARD) {
-    if (t.kind !== 'property') continue;
+    if (!ASSET_KINDS.has(t.kind)) continue;
     (map[t.group] = map[t.group] || []).push(t.i);
   }
   return map;
@@ -78,6 +90,15 @@ const CHANCE = Object.freeze([
   { text: '远行经商，前进至大明宫', moveTo: 22 },
   { text: '误入巷弄，前进至免费停车', moveTo: 11 },
   { text: '倒车回府，后退三格', moveBack: 3 },
+  // ── 新增 8 张：减少重复感，增加玩家互动 ──
+  { text: '科举高中，获得 250 金', cash: 250 },
+  { text: '商队折本，支出 120 金', cash: -120 },
+  { text: '朝廷赏赐，向每位对手各收 80 金', collect: 80 },
+  { text: '修缮城墙，为每位对手各付 30 金', payEach: 30 },
+  { text: '快马加鞭，前进至东关驿站', moveTo: 24 },
+  { text: '巡查盐铁，前进至官营盐铁', moveTo: 25 },
+  { text: '赴任南郊，前进至南郊驿站', moveTo: 28 },
+  { text: '误犯律令，直接进入监狱', jail: true },
 ]);
 
 /** 只读机会卡堆与常量，供测试与 UI 引用 */
@@ -89,6 +110,11 @@ function propIndex(tile) {
   return MONOPOLY_BOARD.find((t) => t.i === tile);
 }
 
+/** 返回 seat 在环形竞价序列中的位置（-1 = 不在序列里） */
+function orderAt(auction, seat) {
+  return auction.order.indexOf(seat);
+}
+
 export class MonopolyGame {
   constructor({ playerNames = [], options = {}, random } = {}) {
     this.random = random || Math.random;
@@ -98,13 +124,15 @@ export class MonopolyGame {
     this.winner = null;
     this.endReason = null;
     this.turnCount = 0;
-    this.pending = null; // {kind:'buy'|'manage', tile}
+    this.pending = null; // {kind:'buy'|'manage'|'auction'|'trade', ...}
     this.roll = null;
     this.extraRollFor = null; // 掷出双数后可再走一次的座位
     this.chanceDeck = [];     // 机会卡堆（存 CHANCE 下标，抽出的卡放回堆底）
+    this.auction = null;      // {tile, price, highest, bidder, order, idx, passed:[seat]}
+    this.trade = null;        // {from, to, give:{tile,cash}, want:{tile,cash}, responded:[]}
     this.last = null;
     this.log = [];
-    this.properties = MONOPOLY_BOARD.filter((t) => t.kind === 'property').map((t) => ({
+    this.properties = MONOPOLY_BOARD.filter((t) => ASSET_KINDS.has(t.kind)).map((t) => ({
       tile: t.i,
       ownerId: null,
       houses: 0,
@@ -113,6 +141,16 @@ export class MonopolyGame {
   }
 
   get n() { return this.players.length; }
+
+  /** 从 from 之后找到下一个存活座位（含 from 自身，若全场只剩一个） */
+  nextAlive(from) {
+    let s = from;
+    for (let i = 0; i < this.n; i++) {
+      s = (s + 1) % this.n;
+      if (this.players[s] && !this.players[s].bankrupt) return s;
+    }
+    return from;
+  }
 
   makePlayer(id, name) {
     return {
@@ -147,6 +185,8 @@ export class MonopolyGame {
     this.roll = null;
     this.extraRollFor = null;
     this.log = [];
+    this.auction = null;
+    this.trade = null;
     this.buildChanceDeck();
     this.pushLog(`游戏开始：${this.players.map((p) => p.name).join('、')}，每人 ${START_CASH} 金`);
     this.pushLog(`轮到 ${this.players[this.current].name}`);
@@ -185,6 +225,11 @@ export class MonopolyGame {
       case 'mortgage': return this.mortgage(seat, act.tile);
       case 'redeem': return this.redeem(seat, act.tile);
       case 'end': return this.endTurn(seat);
+      case 'bid': return this.auctionBid(seat, act.amount);
+      case 'pass_auction': return this.auctionPass(seat);
+      case 'offer_trade': return this.offerTrade(seat, act);
+      case 'accept_trade': return this.resolveTrade(seat, true);
+      case 'decline_trade': return this.resolveTrade(seat, false);
       default: throw new GameError('UNKNOWN_ACT', '未知大富翁操作');
     }
   }
@@ -315,7 +360,7 @@ export class MonopolyGame {
     if (!p || p.bankrupt || this.phase !== 'playing') return this.snapshot();
     const tile = MONOPOLY_BOARD[p.pos];
     if (!tile) return this.advanceTurn();
-    if (tile.kind === 'property') {
+    if (ASSET_KINDS.has(tile.kind)) {
       const prop = this.propAt(tile.i);
       if (!prop) return this.advanceTurn();
       if (prop.ownerId === null) {
@@ -342,8 +387,7 @@ export class MonopolyGame {
       }
       const bonus = this.hasGroupMonopoly(prop.ownerId, tile.group) ? '（同组连片倍租）' : '';
       this.pushLog(`${p.name} 踩中 ${owner.name} 的「${tile.name}」，支付租金 ${rent} 金${bonus}`);
-      if (!this.payBank(p, rent)) return this.advanceTurn();
-      owner.cash += rent;
+      if (!this.payBank(p, rent, prop.ownerId)) return this.advanceTurn();
       return this.advanceTurn();
     }
     if (tile.kind === 'tax') {
@@ -396,6 +440,19 @@ export class MonopolyGame {
       this.collectFromRivals(p, card.collect);
       return this.phase !== 'playing';
     }
+    if (card.payEach) {
+      let paid = 0;
+      for (const other of this.players) {
+        if (other.id === p.id || other.bankrupt) continue;
+        if (this.phase !== 'playing') break;
+        if (!this.payBank(p, card.payEach, other.id)) break;
+        other.cash += card.payEach;
+        paid += card.payEach;
+      }
+      this.pushLog(`${p.name} 向对手支付共 ${paid} 金（每人 ${card.payEach} 金）`);
+      if (this.phase !== 'playing') return true;
+      return false;
+    }
     if (card.moveTo != null || card.moveBack) {
       if (card.moveTo != null) this.moveToTile(p, card.moveTo);
       else this.moveBack(p, card.moveBack);
@@ -412,15 +469,82 @@ export class MonopolyGame {
     for (const other of this.players) {
       if (other.id === p.id || other.bankrupt) continue;
       if (this.phase !== 'playing') break;
-      if (!this.payBank(other, amount)) {
+      if (!this.payBank(other, amount, p.id)) {
         if (this.phase !== 'playing') break;
         continue;
       }
       gained += amount;
     }
-    p.cash += gained;
+    // payBank(creditor=p.id) 已经把钱记入 p.cash，这里不再重复累加。
     if (gained > 0) this.pushLog(`${p.name} 收取 ${gained} 金（每位对手 ${amount} 金）`);
     return gained;
+  }
+
+  // ————————————————————— 玩家交易 —————————————————————
+
+  /** 发起交易：给出 give（tile/cash）换对方 want（tile/cash）。 */
+  offerTrade(seat, act) {
+    this.assertTurn(seat);
+    if (this.pending || this.auction || this.trade) throw new GameError('MUST_FIRST', '请先处理当前事件');
+    const to = Number(act.targetSeat);
+    const target = this.players[to];
+    if (!target || target.bankrupt || to === seat) throw new GameError('ILLEGAL', '请选择一位存活的对手');
+    const give = { tile: this.tradeTile(act.giveTile, seat), cash: this.tradeCash(act.giveCash, seat) };
+    const want = { tile: this.tradeTile(act.wantTile, to), cash: this.tradeCash(act.wantCash, to) };
+    if (give.tile == null && give.cash === 0) throw new GameError('ILLEGAL', '交易必须给出至少一项');
+    if (want.tile == null && want.cash === 0) throw new GameError('ILLEGAL', '交易必须索取至少一项');
+    this.trade = { from: seat, to, give, want };
+    this.pending = { kind: 'trade' };
+    this.current = to;
+    this.pushLog(`${this.players[seat].name} 向 ${target.name} 提出交易`);
+    return this.snapshot();
+  }
+
+  tradeTile(value, owner) {
+    if (value == null || value === '') return null;
+    const i = Number(value);
+    const prop = this.propAt(i);
+    if (!prop || prop.ownerId !== owner) throw new GameError('ILLEGAL', '只能交易自己名下的地产');
+    if (prop.houses > 0) throw new GameError('ILLEGAL', '有建筑的地产不可交易');
+    return i;
+  }
+
+  tradeCash(value, seat) {
+    if (value == null || value === '') return 0;
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 0 || n > this.players[seat].cash) throw new GameError('ILLEGAL', '现金数额不合法');
+    return n;
+  }
+
+  resolveTrade(seat, accept) {
+    if (this.phase !== 'playing' || !this.trade || this.trade.to !== seat || this.current !== seat) {
+      throw new GameError('NOT_TRADE_TARGET', '当前无需你决定交易');
+    }
+    const t = this.trade;
+    const a = this.players[t.from], b = this.players[t.to];
+    this.trade = null;
+    this.pending = null;
+    if (!accept) {
+      this.pushLog(`${b.name} 拒绝了 ${a.name} 的交易`);
+      // 拒绝后不再把回合交回发起者：否则 AI 会反复提同一笔交易形成死循环。
+      this.current = this.nextAlive(t.from);
+      this.turnCount += 1;
+      return this.snapshot();
+    }
+    // 原子交换：校验一次，落实一次，避免中途失败留下半交易状态。
+    if (a.cash < t.give.cash || b.cash < t.want.cash ||
+        (t.give.tile != null && this.propAt(t.give.tile)?.ownerId !== t.from) ||
+        (t.want.tile != null && this.propAt(t.want.tile)?.ownerId !== t.to)) {
+      throw new GameError('ILLEGAL', '交易条件已变化，无法成交');
+    }
+    if (t.give.tile != null) this.propAt(t.give.tile).ownerId = t.to;
+    if (t.want.tile != null) this.propAt(t.want.tile).ownerId = t.from;
+    a.cash += t.want.cash - t.give.cash;
+    b.cash += t.give.cash - t.want.cash;
+    this.pushLog(`${a.name} 与 ${b.name} 达成交易（地产互换 / 现金 ${t.give.cash}⇄${t.want.cash}）`);
+    this.current = this.nextAlive(t.from);
+    this.turnCount += 1;
+    return this.snapshot();
   }
 
   buy(seat) {
@@ -444,8 +568,85 @@ export class MonopolyGame {
     if (!this.pending || this.pending.kind !== 'buy') throw new GameError('NO_PENDING', '当前没有待购买的地产');
     const tile = propIndex(this.pending.tile);
     this.pending = null;
-    this.pushLog(`${this.players[seat].name} 放弃购买「${tile?.name ?? '地产'}」`);
-    this.advanceTurn();
+    this.pushLog(`${this.players[seat].name} 放弃购买「${tile?.name ?? '地产'}」，进入公开拍卖`);
+    this.startAuction(tile.i, Math.ceil((tile?.price ?? 100) / 2));
+    return this.snapshot();
+  }
+
+  // ————————————————————— 公开拍卖 —————————————————————
+
+  /** 放弃购买后：所有存活玩家按座号轮流加价或弃权，价高者得。 */
+  startAuction(tileIndex, startPrice) {
+    const order = this.players.filter((p) => !p.bankrupt).map((p) => p.id);
+    // 从放弃购买者的下家开始，环形排序
+    const from = this.current;
+    order.sort((a, b) => ((a - from + this.n) % this.n) - ((b - from + this.n) % this.n));
+    this.auction = {
+      tile: tileIndex,
+      price: Math.max(1, startPrice),
+      highest: null,
+      bidder: null,
+      order,
+      by: from,
+      idx: 0,
+      passed: [],
+    };
+    this.pending = { kind: 'auction', tile: tileIndex };
+    this.current = order[0];
+  }
+
+  assertAuctionTurn(seat) {
+    const a = this.auction;
+    if (!a || this.phase !== 'playing') throw new GameError('NO_AUCTION', '当前没有拍卖');
+    if (a.passed.includes(seat) || orderAt(a, seat) !== a.idx) throw new GameError('NOT_YOUR_TURN', '还没轮到你竞价');
+  }
+
+  advanceAuction() {
+    const a = this.auction;
+    a.idx += 1;
+    while (a.idx < a.order.length && a.passed.includes(a.order[a.idx])) a.idx += 1;
+    if (a.idx >= a.order.length) return this.finishAuction();
+    this.current = a.order[a.idx];
+    return this.snapshot();
+  }
+
+  auctionBid(seat, amount) {
+    this.assertAuctionTurn(seat);
+    const a = this.auction;
+    const tile = propIndex(a.tile);
+    const p = this.players[seat];
+    const minBid = a.bidder === null ? a.price : a.price + 1;
+    const bid = Number(amount);
+    if (!Number.isInteger(bid) || bid < minBid) throw new GameError('BID_TOO_LOW', `出价需 ≥ ${minBid} 金`);
+    if (p.cash < bid) throw new GameError('INSUFFICIENT_GOLD', '现金不足');
+    a.price = bid; a.bidder = seat; a.highest = bid;
+    this.pushLog(`${p.name} 竞价 ${bid} 金，暂为最高（「${tile.name}」）`);
+    return this.advanceAuction();
+  }
+
+  auctionPass(seat) {
+    this.assertAuctionTurn(seat);
+    this.auction.passed.push(seat);
+    this.pushLog(`${this.players[seat].name} 放弃竞价`);
+    return this.advanceAuction();
+  }
+
+  finishAuction() {
+    const a = this.auction;
+    const tile = propIndex(a.tile);
+    const prop = this.propAt(a.tile);
+    this.auction = null;
+    this.pending = null;
+    if (a.bidder === null || !prop || prop.ownerId !== null) {
+      this.pushLog(`「${tile?.name ?? '地产'}」流拍，保持无主`);
+      this.current = a.by;
+      return this.snapshot();
+    }
+    const p = this.players[a.bidder];
+    p.cash -= a.price;
+    prop.ownerId = a.bidder;
+    this.pushLog(`${p.name} 以 ${a.price} 金拍得「${tile.name}」`);
+    this.current = a.bidder;
     return this.snapshot();
   }
 
@@ -456,6 +657,7 @@ export class MonopolyGame {
     const prop = this.propAt(tile.i);
     const p = this.players[seat];
     if (!tile || !prop || prop.ownerId !== seat) throw new GameError('NOT_OWNER', '不是你的地产');
+    if (tile.kind !== 'property') throw new GameError('NOT_BUILDABLE', '铁路与公用事业不能建造');
     if (prop.mortgaged) throw new GameError('MORTGAGED', '抵押中的地产需先赎回才能建造');
     if (prop.houses >= MAX_HOUSES) throw new GameError('MAX_HOUSES', '该地产已达到最高等级');
     if (p.cash < tile.houseCost) throw new GameError('INSUFFICIENT_GOLD', `建造需要 ${tile.houseCost} 金`);
@@ -480,7 +682,7 @@ export class MonopolyGame {
     const p = this.players[seat];
     if (p.inJail > 0) throw new GameError('IN_JAIL', '狱中不能处置地产');
     const tile = propIndex(Number(tileIdx));
-    const prop = tile && tile.kind === 'property' ? this.propAt(tile.i) : null;
+    const prop = tile && ASSET_KINDS.has(tile.kind) ? this.propAt(tile.i) : null;
     if (!prop) throw new GameError('BAD_TILE', '该格不是可抵押的地产');
     if (prop.ownerId !== seat) throw new GameError('NOT_OWNER', '不是你的地产');
     if (prop.mortgaged) throw new GameError('MORTGAGED', '该地产已处于抵押状态');
@@ -497,7 +699,7 @@ export class MonopolyGame {
     const p = this.players[seat];
     if (p.inJail > 0) throw new GameError('IN_JAIL', '狱中不能处置地产');
     const tile = propIndex(Number(tileIdx));
-    const prop = tile && tile.kind === 'property' ? this.propAt(tile.i) : null;
+    const prop = tile && ASSET_KINDS.has(tile.kind) ? this.propAt(tile.i) : null;
     if (!prop) throw new GameError('BAD_TILE', '该格不是可赎回的地产');
     if (prop.ownerId !== seat) throw new GameError('NOT_OWNER', '不是你的地产');
     if (!prop.mortgaged) throw new GameError('NOT_MORTGAGED', '该地产未抵押');
@@ -526,32 +728,43 @@ export class MonopolyGame {
     this.pushLog(`${p.name} 因${reason}进入监狱（可交保 ${BAIL_COST} 金 / 狱中掷双数 / 服刑满 ${JAIL_MAX_TURNS} 回合强制出狱）`);
   }
 
-  payBank(p, amount) {
+  payBank(p, amount, creditor = null) {
     if (amount <= 0) return true;
     if (p.cash < amount) {
+      const paid = p.cash;
       p.cash = 0;
-      this.bankrupt(p, `无力支付 ${amount} 金`);
+      this.bankrupt(p, `无力支付 ${amount} 金`, creditor, paid);
       return false;
     }
     p.cash -= amount;
+    if (creditor != null && this.players[creditor]) this.players[creditor].cash += amount;
     return true;
   }
 
-  bankrupt(p, reason) {
+  bankrupt(p, reason, creditor = null, partialPaid = 0) {
     if (p.bankrupt) return;
     p.bankrupt = true;
     p.inJail = 0;
     p.doublesRun = 0;
     p.rentFree = 0;
     if (this.extraRollFor === p.id) this.extraRollFor = null;
+    // 破产清算：剩余地产（含抵押状态）转给债主；无债主则回归银行（无主）。
+    let transferred = 0;
     for (const prop of this.properties) {
-      if (prop.ownerId === p.id) {
+      if (prop.ownerId !== p.id) continue;
+      prop.houses = 0;
+      if (creditor != null && this.players[creditor] && !this.players[creditor].bankrupt) {
+        prop.ownerId = creditor;
+        transferred += 1;
+      } else {
         prop.ownerId = null;
-        prop.houses = 0;
         prop.mortgaged = false;
       }
     }
-    this.pushLog(`${p.name} 破产：${reason}`);
+    if (creditor != null && this.players[creditor] && partialPaid > 0) {
+      this.players[creditor].cash += partialPaid;
+    }
+    this.pushLog(`${p.name} 破产：${reason}${transferred ? `，${transferred} 块地产转给债主` : ''}`);
     const alive = this.players.filter((x) => !x.bankrupt);
     if (alive.length <= 1) {
       this.endGame(alive[0]?.id ?? null, 'bankruptcy');
@@ -607,9 +820,19 @@ export class MonopolyGame {
     });
   }
 
-  /** 单块地产当前应收租金（含建筑等级与连片系数；无主或抵押为 0） */
+  /** 单块资产当前应收租金（含建筑等级与连片系数；无主或抵押为 0） */
   rentOf(tile, prop) {
     if (!tile || !prop || prop.ownerId === null || prop.mortgaged) return 0;
+    const owned = this.properties.filter((x) => x.ownerId === prop.ownerId && !x.mortgaged);
+    if (tile.kind === 'railroad') {
+      const count = owned.filter((x) => propIndex(x.tile)?.kind === 'railroad').length;
+      return [0, 25, 50, 100, 200][Math.min(count, 4)];
+    }
+    if (tile.kind === 'utility') {
+      const count = owned.filter((x) => propIndex(x.tile)?.kind === 'utility').length;
+      const dice = (this.roll && this.roll.total) || 4;
+      return dice * (count >= 2 ? 10 : 4);
+    }
     const base = tile.rent * HOUSE_RENT_MULTIPLIERS[Math.min(prop.houses, MAX_HOUSES)];
     const mult = this.hasGroupMonopoly(prop.ownerId, tile.group) ? GROUP_RENT_MULTIPLIER : 1;
     return Math.round(base * mult);
@@ -688,9 +911,32 @@ export class MonopolyGame {
   }
 
   actionsFor(seat) {
-    if (this.phase !== 'playing' || seat !== this.current) return [];
+    if (this.phase !== 'playing') return [];
     const p = this.players[seat];
     if (!p || p.bankrupt) return [];
+    if (this.auction) {
+      if (seat !== this.current || this.auction.passed.includes(seat)) return [];
+      const a = this.auction;
+      const tile = propIndex(a.tile);
+      const minBid = a.bidder === null ? a.price : a.price + 1;
+      const out = [{ id: 'pass_auction', kind: 'pass_auction', label: '放弃竞价', command: { kind: 'pass_auction' } }];
+      if (p.cash >= minBid) {
+        out.unshift({
+          id: `bid:${minBid}`, kind: 'bid', amount: minBid,
+          label: `出价 ${minBid} 金竞拍「${tile.name}」`, command: { kind: 'bid', amount: minBid },
+        });
+      }
+      return out;
+    }
+    if (this.pending?.kind === 'trade') {
+      if (seat !== this.current) return [];
+      const t = this.trade;
+      return [
+        { id: 'accept_trade', kind: 'accept_trade', label: '接受交易', command: { kind: 'accept_trade' } },
+        { id: 'decline_trade', kind: 'decline_trade', label: '拒绝交易', command: { kind: 'decline_trade' } },
+      ];
+    }
+    if (seat !== this.current) return [];
     if (this.pending?.kind === 'buy') {
       const tile = propIndex(this.pending.tile);
       const canBuy = tile && p.cash >= tile.price;
@@ -704,7 +950,7 @@ export class MonopolyGame {
       const tile = propIndex(this.pending.tile);
       const prop = this.propAt(tile.i);
       const out = [];
-      if (prop && !prop.mortgaged && prop.houses < MAX_HOUSES && p.cash >= tile.houseCost) {
+      if (tile?.kind === 'property' && prop && !prop.mortgaged && prop.houses < MAX_HOUSES && p.cash >= tile.houseCost) {
         out.push({ id: 'build', kind: 'build', label: `建造「${tile.name}」→ Lv${prop.houses + 1}（${tile.houseCost} 金）`, command: { kind: 'build' } });
       }
       out.push(...this.redeemActions(seat));
@@ -726,8 +972,23 @@ export class MonopolyGame {
       });
       return out;
     }
+    const offers = this.players
+      .filter((o) => !o.bankrupt && o.id !== seat)
+      .map((o) => {
+        // AI/无 UI 客户端可用的默认报价：现金换对方最贵的一块无建筑地产。
+        const target = this.mortgageable(o.id)[0];
+        if (target == null || p.cash < Math.ceil(target.price * 0.6)) return null;
+        const cash = Math.ceil(target.price * 0.4);
+        return {
+          id: `offer_trade:${o.id}:${target.i}`, kind: 'offer_trade',
+          label: `向 ${o.name} 出价 ${cash} 金购买「${target.name}」`,
+          command: { kind: 'offer_trade', targetSeat: o.id, giveCash: cash, wantTile: target.i },
+        };
+      })
+      .filter(Boolean);
     return [
       { id: 'roll', kind: 'roll', label: '掷骰子', command: { kind: 'roll' } },
+      ...offers,
       ...this.redeemActions(seat),
       ...this.mortgageActions(seat),
     ];
@@ -743,6 +1004,12 @@ export class MonopolyGame {
       roll: this.roll,
       extraRollFor: this.extraRollFor,
       pending: this.pending ? { ...this.pending } : null,
+      auction: this.auction ? {
+        tile: this.auction.tile, price: this.auction.price, highest: this.auction.highest,
+        bidder: this.auction.bidder, awaiting: this.current,
+        passed: this.auction.passed.slice(),
+      } : null,
+      trade: this.trade ? { ...this.trade } : null,
       chanceCards: this.chanceDeck.length,
       players: this.players.map((p) => ({
         id: p.id, name: p.name, cash: p.cash, pos: p.pos, inJail: p.inJail, bankrupt: p.bankrupt,
@@ -788,7 +1055,22 @@ export function aiMonopoly(game, seat) {
   const acts = game.actionsFor(seat);
   if (!acts.length) return null;
   const p = game.players[seat];
-  const mortgage = acts.filter((a) => a.kind === 'mortgage');
+
+  // 拍卖：估值高于当前价且手头宽裕才跟价，否则弃权。
+  if (game.auction) {
+    const tile = propIndex(game.auction.tile);
+    const bid = acts.find((a) => a.kind === 'bid');
+    if (tile && bid && p.cash >= bid.amount + 200 && bid.amount <= Math.ceil(tile.price * 0.8)) return bid.command;
+    return { kind: 'pass_auction' };
+  }
+  // 交易：对方报价若净收益为正就接受。
+  if (game.pending?.kind === 'trade') {
+    const t = game.trade;
+    const gainTile = t.give.tile == null ? 0 : propIndex(t.give.tile).price;
+    const loseTile = t.want.tile == null ? 0 : propIndex(t.want.tile).price;
+    return (gainTile + t.give.cash >= loseTile + t.want.cash)
+      ? { kind: 'accept_trade' } : { kind: 'decline_trade' };
+  }  const mortgage = acts.filter((a) => a.kind === 'mortgage');
   const redeem = acts.filter((a) => a.kind === 'redeem');
 
   if (game.pending?.kind === 'buy') {
@@ -817,6 +1099,11 @@ export function aiMonopoly(game, seat) {
   // 手头紧时抵押救急，宽裕时把失血的地赎回来
   if (p.cash < 200 && mortgage.length) return mortgage[0].command;
   if (p.cash > 800 && redeem.length) return redeem[0].command;
+  // 主动交易仅在回合早期且对方尚未持有大量资产时尝试（避免无限互提交易）。
+  if (p.cash > 900 && game.turnCount <= 3) {
+    const offer = acts.find((a) => a.kind === 'offer_trade');
+    if (offer) return offer.command;
+  }
   return { kind: 'roll' };
 }
 

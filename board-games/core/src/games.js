@@ -62,7 +62,8 @@ export const GAMES = {
     card: 'EK',
     min: 2,
     max: 5,
-    create: (o) => new ExplodingKittensGame(o),
+    // 休想卡（Nope）默认启用：行动先开反应窗口，所有存活玩家表态后结算。
+    create: (o) => new ExplodingKittensGame({ ...(o || {}), options: { nopeWindow: true, ...((o || {}).options || {}) } }),
     ai: aiEk,
   },
   liarsbar: {

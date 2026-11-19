@@ -1,3 +1,14 @@
+# 桌游 AI 与玩法扩充 · 2026-11-19
+
+GitHub 调研结论：斗地主最强的 DouZero/RLCard 都是 Python/PyTorch，无 JS/ONNX 推理，塞不进零依赖 JS core；大富翁现成仓库只是 UI 复刻；休想卡是桌游原版规则，照引擎已有反应窗口模型扩展即可。因此三项均自研，且全部走 Host 原有白名单校验、LLM 只做建议。
+
+- **斗地主 AI**（`doudizhu.js`）：新增手牌分解搜索（最少手数 + 记忆化 + 节点预算）、记牌（`game.played`）、残局与农民配合；旧 AI 保留为 `aiDoudizhuLegacy` 基线。60 局 A/B 实跑：新 AI **48.3%** vs 旧 **38.3%**，零非法动作（`node board-games/scripts/doudizhu-ai-bench.mjs 60` 可复跑）。LLM 席位本来就由 host 通用覆盖，补 3 条测试固定「非法牌回落启发式」。
+- **炸弹猫休想卡**（`exploding.js`）：新牌种 `nope`，完整反应窗口 + Nope 链（奇数取消、偶数抵消，可被反制）；爆炸/拆弹不可打断；AI 只用公开信息、不窥牌库。旧行为通过 `nopeWindow` 选项保留（注册表默认开）。
+- **大富翁**（`monopoly.js`）：放弃购买 → 公开拍卖（加价/弃权）；玩家交易（地+现金原子互换）；棋盘 24 → 32 格（**追加不插入**，旧索引不变）含 4 铁路 + 2 公用事业（租金 25/50/100/200、骰点×4/×10）；机会卡 12 → 20；破产时地产转给债主。AI 会参与拍卖/交易，且修复了交易拒绝后反复重提的死循环。
+- **验收**：`board-games/npm test` **162/162** 全绿；新增 `exploding-nope.test.js`（10）、`monopoly-expansion.test.js`（10），并登记到静态 `run-all.mjs`；`build-web.mjs` 重出 uno bundle，三端 WebView 资源已重新同步（0 diff）。规则细节与未做项见 `docs/10-桌游AI与玩法扩充.md`。
+
+**未做**：DouZero 权重未移植（需 Python 服务，冲突「离线可玩」）；大富翁新格集中在棋盘后半段（重排会破坏旧索引）；UI 用通用动作列表呈现新机制，未做专用面板。
+
 # 三端蓝牙联机适配 · 2026-11-18
 
 调研结论：**没有**现成的 iOS + Android + HarmonyOS 三端蓝牙**多人联机**库可直接用。blue-falcon / flutter_blue_plus_ohos / react-native-ble-plx 都是 BLE Central-only（无 GATT Server/广播），Apple Multipeer 与 Google Nearby 都不到三端；iOS 不用 MFi 无法跑现有 APK 的 SPP/RFCOMM。因此自研 BLE GATT 传输层，WebView 资源逐字节不变。

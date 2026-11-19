@@ -64,6 +64,11 @@ test('大富翁：掷出双数再走一次，第三次双数直接入狱', () =>
     g.applyAction(0, { kind: 'roll' });
     if (g.pending?.kind === 'buy') g.applyAction(0, { kind: 'decline' });
     else if (g.pending?.kind === 'manage') g.applyAction(0, { kind: 'end' });
+    // 放弃购买会进入公开拍卖：所有人都弃权后回合继续。
+    let guard = 0;
+    while (g.pending?.kind === 'auction' && guard++ < 10) {
+      g.applyAction(g.current, { kind: 'pass_auction' });
+    }
   };
 
   rollAndClear();

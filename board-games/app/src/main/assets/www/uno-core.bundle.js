@@ -654,6 +654,7 @@ class DoudizhuGame {
     this.passCount = 0;
     this.bidScores = []; // per-seat bid score
     this.diPai = []; // 3 kept-aside (底牌)
+    this.played = []; // public play history: {seat, values:[...], combo} — 记牌用
     this.last = null;
   }
 
@@ -737,6 +738,9 @@ class DoudizhuGame {
       throw new GameError('ILLEGAL', '打不过上家的牌');
     }
     this.lastPlay = { seat, cards: cards.map((c) => ({ ...c })), combo };
+    // Public memory: every played card is visible in 斗地主. The strengthened AI
+    // uses this to count remaining high cards; it never reveals hidden hands.
+    this.played.push(...cards.map((c) => ({ seat, value: c.value, rank: c.rank })));
     this.passCount = 0;
     this.last = { kind: 'play', seat, cards: cards.map((c) => c.id), combo: combo.type };
 
@@ -979,7 +983,9 @@ function legalCardIds(game, seat, cardIds) {
   return cardIds;
 }
 
-function aiDoudizhu(game, seat) {
+// Legacy rule AI: kept as an exported baseline for A/B benchmarks and as the
+// last-resort fallback. It plays the first legal combo found, without search.
+function aiDoudizhuLegacy(game, seat) {
   const hand = game.players[seat].hand;
   if (game.phase === DDF.PHASE.BIDDING) {
     const strong = hand.filter((c) => c.value >= VALUE['A']).length +
@@ -1024,6 +1030,284 @@ function groupCounts(hand) {
   return counts;
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// 强化 AI：手牌分解搜索 + 记牌 + 残局，零依赖、确定性、不发非法牌。
+// 设计要点：
+//   1. 所有候选组合都经过 legalCardIds() 复核（同一道闸门，绝不发非法牌）；
+//   2. 估值启发式全整数、无随机、无时间依赖 ⇒ 同输入必出同决策；
+//   3. 手牌分解用「最少手数」递归 + 记忆化 + 节点预算，预算耗尽回落上界估值；
+//   4. 记牌只读 game.played（斗地主出牌本就公开），不看任何隐藏手牌。
+// ─────────────────────────────────────────────────────────────────────
+
+// value index: 0..12 = 3..A? 实际 v = index+3 (3..17)；数组长度 15
+const VIDX = (v) => v - 3;
+const VMAX_I = 14; // value 17 = BJ
+
+function countsOf(hand) {
+  const cs = new Array(15).fill(0);
+  for (const c of hand) cs[VIDX(c.value)]++;
+  return cs;
+}
+function keyOf(cs) { return cs.join(','); }
+function sumOf(cs) { let n = 0; for (const x of cs) n += x; return n; }
+
+/** 枚举一个 count 向量能拆出的牌型（只列代表，用于估值，不用于出牌）。 */
+function shapesOf(cs) {
+  const out = [];
+  // 单 / 对 / 三 / 三带 / 炸弹
+  for (let v = 0; v <= VMAX_I; v++) {
+    if (cs[v] >= 1) out.push([[v, 1]]);
+    if (cs[v] >= 2) out.push([[v, 2]]);
+    if (cs[v] >= 3) {
+      out.push([[v, 3]]);
+      for (let k = 0; k <= VMAX_I; k++) if (k !== v && cs[k] >= 1) { out.push([[v, 3], [k, 1]]); break; }
+      for (let k = 0; k <= VMAX_I; k++) if (k !== v && cs[k] >= 2) { out.push([[v, 3], [k, 2]]); break; }
+    }
+    if (cs[v] === 4) out.push([[v, 4]]);
+  }
+  // 王炸
+  if (cs[13] >= 1 && cs[14] >= 1) out.push([[13, 1], [14, 1]]);
+  // 顺子 / 连对 / 飞机（含翅膀，只取最小翅膀代表）
+  const runs = (need, minLen, maxV) => {
+    for (let v = 0; v <= maxV; v++) {
+      if (cs[v] < need) continue;
+      let end = v;
+      while (end + 1 <= maxV && cs[end + 1] >= need) end++;
+      for (let len = minLen; len <= end - v + 1; len++) {
+        for (let s = v; s + len - 1 <= end; s++) {
+          const body = [];
+          for (let i = s; i < s + len; i++) body.push([i, need]);
+          out.push(body.map((x) => x.slice()));
+          // 翅膀只属于飞机（need=3）：len 个三张配 len 张单 / len 对。
+          if (need !== 3) continue;
+          const singles = [], pairs = [];
+          for (let k = 0; k <= VMAX_I; k++) {
+            if (body.some((b) => b[0] === k)) continue;
+            if (cs[k] >= 1 && singles.length < len) singles.push([k, 1]);
+            if (cs[k] >= 2 && pairs.length < len) pairs.push([k, 2]);
+          }
+          if (singles.length === len) out.push(body.concat(singles));
+          if (pairs.length === len) out.push(body.concat(pairs));
+        }
+      }
+    }
+  };
+  runs(1, 5, 11); // 顺子到 A（v=14 → idx 11）
+  runs(2, 3, 11); // 连对
+  runs(3, 2, 11); // 飞机
+  // 四带二
+  for (let v = 0; v <= VMAX_I; v++) {
+    if (cs[v] !== 4) continue;
+    const singles = [], pairs = [];
+    for (let k = 0; k <= VMAX_I; k++) {
+      if (k === v) continue;
+      if (cs[k] >= 1 && singles.length < 2) singles.push([k, 1]);
+      if (cs[k] >= 2 && pairs.length < 2) pairs.push([k, 2]);
+    }
+    if (singles.length === 2) out.push([[v, 4]].concat(singles));
+    if (pairs.length === 2) out.push([[v, 4]].concat(pairs));
+  }
+  return out;
+}
+
+/** 把牌型代表的 value/count 规格映射成具体手牌 id（取最小 id，稳定）。 */
+function idsOfShape(hand, shape) {
+  const ids = [];
+  for (const [vi, need] of shape) {
+    const value = vi + 3;
+    let got = 0;
+    for (const c of hand) {
+      if (c.value !== value || got >= need) continue;
+      if (ids.includes(c.id)) continue;
+      ids.push(c.id); got++;
+    }
+    if (got < need) return null;
+  }
+  return ids;
+}
+
+function subtract(cs, shape) {
+  const out = cs.slice();
+  for (const [v, k] of shape) {
+    out[v] -= k;
+    if (out[v] < 0) return null;
+  }
+  return out;
+}
+
+/** 最少手数估值：递归拆牌 + 记忆化；节点预算保证最坏情况也有确定上界。 */
+function minTurns(cs, memo, budget) {
+  const total = sumOf(cs);
+  if (total === 0) return 0;
+  const key = keyOf(cs);
+  if (memo.has(key)) return memo.get(key);
+  if (budget.n-- <= 0) return total; // 上界：每张一张一张出
+  let best = total;
+  for (const shape of shapesOf(cs)) {
+    const rest = subtract(cs, shape);
+    if (!rest || sumOf(rest) === total) continue;
+    const t = 1 + minTurns(rest, memo, budget);
+    if (t < best) best = t;
+    if (best <= 1) break;
+  }
+  memo.set(key, best);
+  return best;
+}
+
+function decompose(hand, budgetN = 20000) {
+  const cs = countsOf(hand);
+  return { cs, turns: minTurns(cs, new Map(), { n: budgetN }) };
+}
+
+/** 已出牌的公开统计：v → 已出现张数（含自己打出的）。 */
+function playedCounts(game) {
+  const m = new Array(15).fill(0);
+  for (const p of game.played || []) {
+    const i = VIDX(p.value);
+    if (i >= 0 && i <= VMAX_I) m[i]++;
+  }
+  return m;
+}
+
+/** 外部还剩几张比我大的牌（4 张上限 - 已出 - 我手里）。 */
+function higherOutside(game, seat, value) {
+  const mine = countsOf(game.players[seat].hand);
+  const seen = playedCounts(game);
+  let n = 0;
+  for (let v = value + 1; v <= 17; v++) {
+    const i = VIDX(v);
+    const total = v >= 16 ? 1 : 4;
+    n += Math.max(0, total - seen[i] - mine[i]);
+  }
+  return n;
+}
+
+/** 枚举当前手牌全部合法候选（首出/跟牌统一在此生成，再过 legalCardIds）。 */
+function allCandidates(game, seat) {
+  const hand = game.players[seat].hand;
+  const seen = new Set();
+  const out = [];
+  for (const shape of shapesOf(countsOf(hand))) {
+    const ids = idsOfShape(hand, shape);
+    if (!ids || !ids.length) continue;
+    const key = ids.slice().sort().join(',');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const clean = legalCardIds(game, seat, ids);
+    if (!clean) continue;
+    const combo = classifyDdz(ids.map((id) => hand.find((c) => c.id === id)));
+    out.push({ ids: clean, combo });
+  }
+  return out;
+}
+
+/** 跟牌候选：同型更大 + 炸弹/王炸；首出候选：全部。 */
+function followCandidates(game, seat, target) {
+  return allCandidates(game, seat).filter((x) =>
+    !target || beatsDdz(x.combo, target) || x.combo.type === 'bomb' || x.combo.type === 'rocket');
+}
+
+/** 打完这手后的剩余手数越少越好；同手数优先多出牌、少浪费大牌/炸弹。 */
+function scorePlay(hand, ids, combo, restTurns) {
+  const used = new Set(ids);
+  const rest = hand.filter((c) => !used.has(c.id));
+  const top = combo.rank;
+  const waste = used.size && rest.length
+    ? rest.filter((c) => c.value > top + 2).length * 0.02
+    : 0;
+  const bombCost = (combo.type === 'bomb' || combo.type === 'rocket') && rest.length > 4 ? 0.6 : 0;
+  // 同手数时优先多出牌：ids 越多扣分越少（不是越多扣分越多）。
+  return restTurns - ids.length * 0.01 + waste + bombCost;
+}
+
+/** 叫分估值：大牌 + 炸弹 + 手数，整数、可复算。 */
+function bidPower(hand) {
+  const { turns } = decompose(hand, 8000);
+  const cs = countsOf(hand);
+  let power = 0;
+  for (let v = 10; v <= VMAX_I; v++) power += cs[v]; // J/Q/K/A/2/小王/大王
+  for (let v = 0; v <= VMAX_I; v++) if (cs[v] === 4) power += 2;
+  if (cs[13] && cs[14]) power += 2;
+  return power + Math.max(0, 9 - turns);
+}
+
+/**
+ * 强化斗地主 AI（导出名保持 aiDoudizhu，Host/LLM 回落都走这里）。
+ * 与 aiDoudizhuLegacy 的区别：搜索最少手数、记牌判大、残局优先一手走完。
+ */
+function aiDoudizhu(game, seat) {
+  const hand = game.players[seat].hand;
+  if (game.phase === DDF.PHASE.BIDDING) {
+    if (game.current !== seat || game.bidScores[seat] !== null) return null;
+    const p = bidPower(hand);
+    const maxBid = Math.min(...game.bidScores.filter((s) => s !== null), 3);
+    let score = p >= 14 ? 3 : p >= 11 ? 2 : p >= 8 ? 1 : 0;
+    // 已有高分叫牌时不必跟到顶，但自己极强仍抢
+    if (score <= maxBid && p < 14) score = Math.max(0, score - 1);
+    return { kind: 'bid', score };
+  }
+  if (game.phase !== DDF.PHASE.PLAYING || game.current !== seat) return null;
+  if (game.lastPlay && game.lastPlay.seat === seat) return { kind: 'pass' };
+
+  const target = game.lastPlay ? game.lastPlay.combo : null;
+  const opponents = game.players
+    .map((p, i) => ({ i, n: p.hand.length }))
+    .filter((x) => x.i !== seat && (game.landlord === null || game.landlord === x.i || game.landlord === seat));
+  const minOpp = opponents.length ? Math.min(...opponents.map((x) => x.n)) : 99;
+  const meLandlord = game.landlord === seat;
+
+  // 农民配合：队友（另一农民）压住地主时，除非能一手走完，否则不抢。
+  if (!meLandlord && target && game.lastPlay.seat !== game.landlord) {
+    const finish = allCandidates(game, seat).find((x) => x.ids.length === hand.length);
+    if (finish) return { kind: 'play', cardIds: finish.ids };
+    return { kind: 'pass' };
+  }
+
+  // 一手走完永远最优（残局）。
+  const all = allCandidates(game, seat);
+  const finisher = all.find((x) => x.ids.length === hand.length && (!target || beatsDdz(x.combo, target)));
+  if (finisher) return { kind: 'play', cardIds: finisher.ids };
+
+  const cands = target ? all.filter((x) => beatsDdz(x.combo, target)) : all;
+  if (!cands.length) return { kind: 'pass' };
+
+  const memo = new Map();
+  const budget = { n: 20000 };
+  let best = null;
+  let bestScore = Infinity;
+  for (const cand of cands) {
+    const used = new Set(cand.ids);
+    const rest = hand.filter((c) => !used.has(c.id));
+    const turns = rest.length ? minTurns(countsOf(rest), memo, budget) : 0;
+    let sc = scorePlay(hand, cand.ids, cand.combo, turns);
+    // 对手只剩 1-2 张：必须卡住，绝不轻易 pass；优先用能压住且不留后患的牌。
+    if (minOpp <= 2 && target) sc -= 0.4;
+    // 记牌：首出单张若外面已无更大牌，等于稳拿一轮（对手少牌时尤其关键）。
+    if (!target && cand.combo.type === 'single' && higherOutside(game, seat, cand.combo.rank) === 0) {
+      sc -= minOpp <= 3 ? 0.5 : 0.15;
+    }
+    // 炸弹/王炸：对手还多时留作后手，除非能一手清空或对手要赢了。
+    if ((cand.combo.type === 'bomb' || cand.combo.type === 'rocket') &&
+        !finisher && minOpp > 3 && rest.length > 4) sc += 1.2;
+    // 稳定 tie-break：分数相同按牌 id 字典序，保证确定性。
+    if (sc < bestScore - 1e-9 || (Math.abs(sc - bestScore) <= 1e-9 &&
+        best && cand.ids.join(',') < best.ids.join(','))) {
+      best = cand; bestScore = sc;
+    }
+  }
+  if (!best) return { kind: 'pass' };
+
+  // 跟牌时若唯一能压的是炸弹且局势未紧，则过牌保留（但仍受对手少牌约束）。
+  if (target && (best.combo.type === 'bomb' || best.combo.type === 'rocket') &&
+      minOpp > 3 && hand.length > 6) {
+    const plain = cands.find((x) => x.combo.type !== 'bomb' && x.combo.type !== 'rocket');
+    if (!plain) return { kind: 'pass' };
+    best = plain;
+  }
+  const finalIds = legalCardIds(game, seat, best.ids);
+  return finalIds ? { kind: 'play', cardIds: finalIds } : { kind: 'pass' };
+}
+
 const RANKS_DDZ = RANKS;
 
 
@@ -1031,6 +1315,7 @@ const RANKS_DDZ = RANKS;
   __exports.classifyDdz = classifyDdz;
   __exports.beatsDdz = beatsDdz;
   __exports.DoudizhuGame = DoudizhuGame;
+  __exports.aiDoudizhuLegacy = aiDoudizhuLegacy;
   __exports.aiDoudizhu = aiDoudizhu;
   __exports.RANKS_DDZ = RANKS_DDZ;
 }
@@ -1044,10 +1329,20 @@ function __mod5(__req, __exports) {
 // turns = play action cards (skip/shuffle/see) then must draw; defuse is applied
 // automatically when you hit a kitten.
 //
-// Card kinds: explode, defuse, skip, see, shuffle, cat (junk).
+// Card kinds: explode, defuse, skip, see, shuffle, attack, favor, cat (junk),
+//             nope (休想卡：取消任意行动，可被另一张休想卡反制).
+//
+// Nope chain rule: when an action is played, every other alive player gets one
+// chance (in turn order) to play a Nope or pass. Each Nope toggles the effect:
+// odd total Nopes ⇒ the original action is cancelled; even (incl. 0) ⇒ it
+// resolves. This naturally implements "Nope can be Noped". Exploding kittens
+// and defusing are NOT nope-able — they are not player actions.
 
 
 
+
+// 这些行动可以被休想卡打断。give 是恩惠的强制回应，不单独开放打断。
+const NOPE_ABLE = new Set(['play', 'draw', 'cats', 'favor', 'attack', 'shuffle2']);
 
 let _id = 0;
 const mk = (kind, extra) => ({ id: 'ek' + (kind) + '-' + (_id++), kind: kind, ...extra });
@@ -1056,8 +1351,8 @@ function buildEkDeck(playerCount, handSize = 4) {
   const n = Math.max(2, playerCount | 0 || 2);
   const need = n * (handSize + 1) + 12; // serve every player + draw-pile reserve
   const cards = [];
-  // cycle: skip, see, shuffle, attack, favor, and 3 cat subtypes (红/黄/蓝, 2 copies each)
-  const cycle = ['skip', 'see', 'shuffle', 'attack', 'favor', 'cat红', 'cat红', 'cat黄', 'cat黄', 'cat蓝', 'cat蓝'];
+  // cycle: skip, see, shuffle, attack, favor, nope, and 3 cat subtypes (红/黄/蓝, 2 copies each)
+  const cycle = ['skip', 'see', 'shuffle', 'attack', 'favor', 'nope', 'cat红', 'cat红', 'cat黄', 'cat黄', 'cat蓝', 'cat蓝'];
   for (let i = 0; i < need; i++) {
     const t = cycle[i % cycle.length];
     if (t.indexOf('cat') === 0) cards.push(mk('cat', { cat: t.slice(3) }));
@@ -1069,6 +1364,9 @@ function buildEkDeck(playerCount, handSize = 4) {
 const DEFAULT_OPTIONS = {
   handSize: 4,          // cards dealt to each player (besides the starting defuse)
   kittensPerPlayer: 1,  // exploding kittens lookahead handled in start()
+  // 关闭（默认）：行动即时结算，旧剧本/旧测试逐字不变。
+  // 开启：行动先进入休想窗口，所有存活玩家表态后按 Nope 奇偶结算。
+  nopeWindow: false,
 };
 
 class ExplodingKittensGame {
@@ -1085,6 +1383,10 @@ class ExplodingKittensGame {
     this.seeTop = null; // transient reveal for the "see" action
     this.pendingDefuse = null; // {seat, card} when a player defused a bomb and must choose a position
     this.pendingFavor = null; // {from, target} when a Favor card is being resolved
+    // 休想卡反应窗口：{ action, actor, nopes, order, responded:[seat], targetSeat }
+    // order 是本次有权响应的座位序列（除发起者外的存活玩家，按座号环形排序）；
+    // nopes 为已打出的休想卡总数：奇数取消原行动，偶数（含 0）照常结算。
+    this.pendingNope = null;
   }
 
   get n() { return this.players.length; }
@@ -1123,6 +1425,7 @@ class ExplodingKittensGame {
     this.seeTop = null;
     this.pendingDefuse = null;
     this.pendingFavor = null;
+    this.pendingNope = null;
     return this.snapshot();
   }
 
@@ -1149,6 +1452,20 @@ class ExplodingKittensGame {
     const act = action || {};
     switch (act.kind) {
       case 'start': return this.start();
+      case 'nope': return this.playNope(seat);
+      case 'passNope': return this.passNope(seat);
+      default: break;
+    }
+    // 休想窗口内只接受 nope / passNope（爆炸/拆弹等不可打断的例外不经过窗口）。
+    if (this.pendingNope) throw new GameError('MUST_FIRST', '请先处理休想卡窗口');
+    // 可被休想卡打断的行动：开启窗口时先开窗，否则保持旧行为即时结算。
+    if (this.opts.nopeWindow && NOPE_ABLE.has(act.kind)) return this.beginNope(seat, act);
+    return this.execAction(seat, act);
+  }
+
+  /** 真正结算一个行动（已通过休想窗口，或本来就不可打断）。 */
+  execAction(seat, act) {
+    switch (act.kind) {
       case 'play': return this.playCard(seat, act.cardId);
       case 'draw': return this.draw(seat);
       case 'defuse': return this.defuse(seat, act.position);
@@ -1161,13 +1478,113 @@ class ExplodingKittensGame {
     }
   }
 
+  /** 开一个休想窗口：除发起者外的存活玩家按座号顺序各表态一次。 */
+  beginNope(seat, act) {
+    this.assertPlaying(seat);
+    if (this.pendingDefuse || this.pendingFavor) throw new GameError('MUST_FIRST', '请先处理当前事件');
+    // 开窗前先校验行动本身：不能因为休想机制绕过原有合法性检查。
+    // 这里只验证「牌是否存在 / 种类是否对 / 目标是否存活」，不改状态。
+    if (act.kind === 'play') {
+      const card = this.players[seat].hand.find((c) => c.id === act.cardId);
+      if (!card) throw new GameError('NO_CARD', '你手里没有这张牌');
+      if (card.kind === 'explode' || card.kind === 'defuse' || card.kind === 'cat' ||
+          card.kind === 'favor' || card.kind === 'attack' || card.kind === 'nope') {
+        throw new GameError('ILLEGAL', '这张牌不能单独打出');
+      }
+    } else if (act.kind === 'favor' || act.kind === 'attack') {
+      const card = this.players[seat].hand.find((c) => c.id === act.cardId);
+      if (!card || card.kind !== act.kind) throw new GameError('NO_CARD', '你没有这张牌');
+      const t = this.players[act.targetSeat];
+      if (!t || !t.alive || act.targetSeat === seat) throw new GameError('ILLEGAL', '请选择一位存活的玩家');
+    } else if (act.kind === 'cats' || act.kind === 'shuffle2') {
+      const cards = (act.cardIds || []).map((id) => this.players[seat].hand.find((c) => c.id === id));
+      if (cards.some((c) => !c)) throw new GameError('NO_CARD', '你手里没有这张牌');
+      const want = act.kind === 'cats' ? ['cat', 2, 3] : ['shuffle', 2, 2];
+      if (cards.length < want[1] || cards.length > want[2] || cards.some((c) => c.kind !== want[0])) {
+        throw new GameError('ILLEGAL', '出牌组合不合法');
+      }
+    }
+    const order = [];
+    for (let i = 1; i < this.n; i++) {
+      const s = (seat + i) % this.n;
+      if (this.players[s].alive) order.push(s);
+    }
+    this.pendingNope = {
+      action: { ...act },
+      actor: seat,
+      targetSeat: act.targetSeat == null ? null : act.targetSeat,
+      nopes: 0,
+      order,
+      responded: [],
+      nopeBy: [],
+    };
+    this.seeTop = null;
+    this.last = { kind: 'nopeWindow', actor: seat, action: act.kind, targetSeat: this.pendingNope.targetSeat };
+    if (order.length === 0) return this.finishNope();
+    this.current = order[0];
+    return this.snapshot();
+  }
+
+  assertNopeResponder(seat) {
+    const w = this.pendingNope;
+    if (!w) throw new GameError('NO_NOPE_WINDOW', '当前没有休想卡窗口');
+    if (!w.order.includes(seat) || w.responded.includes(seat)) throw new GameError('NOT_RESPONDER', '现在不需要你表态');
+    if (seat !== this.current) throw new GameError('NOT_YOUR_TURN', '还没轮到你表态');
+    if (!this.players[seat].alive) throw new GameError('ELIMINATED', '你已被淘汰');
+  }
+
+  /** 打出休想卡：可被下一张休想卡反制（计数奇偶抵消）。 */
+  playNope(seat) {
+    this.assertNopeResponder(seat);
+    const hand = this.players[seat].hand;
+    const card = hand.find((c) => c.kind === 'nope');
+    if (!card) throw new GameError('NO_CARD', '你手里没有休想卡');
+    hand.splice(hand.indexOf(card), 1);
+    this.discard.push(card);
+    const w = this.pendingNope;
+    w.nopes += 1;
+    w.responded.push(seat);
+    w.nopeBy.push(seat);
+    this.last = { kind: 'nope', seat, targetSeat: w.actor, count: w.nopes };
+    return this.advanceNope();
+  }
+
+  /** 明确放弃本次休想表态。 */
+  passNope(seat) {
+    this.assertNopeResponder(seat);
+    this.pendingNope.responded.push(seat);
+    this.last = { kind: 'passNope', seat };
+    return this.advanceNope();
+  }
+
+  advanceNope() {
+    const w = this.pendingNope;
+    const next = w.order.find((s) => !w.responded.includes(s));
+    if (next !== undefined) { this.current = next; return this.snapshot(); }
+    return this.finishNope();
+  }
+
+  finishNope() {
+    const w = this.pendingNope;
+    this.pendingNope = null;
+    if (w.nopes % 2 === 1) {
+      // 奇数张休想卡 ⇒ 原行动取消；回合回到发起者，由其继续摸牌。
+      this.last = { kind: 'noped', actor: w.actor, action: w.action.kind, count: w.nopes };
+      this.current = w.actor;
+      return this.snapshot();
+    }
+    // 偶数张（含 0）⇒ 原行动照常结算。结算期间 current 必须是发起者。
+    this.current = w.actor;
+    return this.execAction(w.actor, w.action);
+  }
+
   playCard(seat, cardId) {
     this.assertPlaying(seat);
     if (this.pendingDefuse || this.pendingFavor) throw new GameError('MUST_FIRST', '请先处理当前事件');
     const hand = this.players[seat].hand;
     const card = hand.find((c) => c.id === cardId);
     if (!card) throw new GameError('NO_CARD', '你手里没有这张牌');
-    if (card.kind === 'explode' || card.kind === 'defuse' || card.kind === 'cat' || card.kind === 'favor' || card.kind === 'attack') {
+    if (card.kind === 'explode' || card.kind === 'defuse' || card.kind === 'cat' || card.kind === 'favor' || card.kind === 'attack' || card.kind === 'nope') {
       throw new GameError('ILLEGAL', '这张牌不能单独打出');
     }
     hand.splice(hand.indexOf(card), 1);
@@ -1350,6 +1767,15 @@ class ExplodingKittensGame {
       seeTop: this.seeTop,
       pendingDefuse: this.pendingDefuse ? { seat: this.pendingDefuse.seat } : null,
       pendingFavor: this.pendingFavor ? { from: this.pendingFavor.from, target: this.pendingFavor.target } : null,
+      pendingNope: this.pendingNope ? {
+        actor: this.pendingNope.actor,
+        action: this.pendingNope.action.kind,
+        targetSeat: this.pendingNope.targetSeat,
+        nopes: this.pendingNope.nopes,
+        order: this.pendingNope.order.slice(),
+        responded: this.pendingNope.responded.slice(),
+        awaiting: this.current,
+      } : null,
     };
   }
 
@@ -1364,6 +1790,27 @@ class ExplodingKittensGame {
 // ---- AI ----
 function aiEk(game, seat) {
   if (game.phase !== 'playing') return null;
+  // 休想窗口：轮到自己表态。手上有休想卡时，只在「对方行动会伤害自己」时反制，
+  // 避免无脑消耗；否则明确 passNope（不留空转）。
+  if (game.pendingNope) {
+    const w = game.pendingNope;
+    if (w.actor === seat || !w.order.includes(seat) || w.responded.includes(seat)) return null;
+    if (game.current !== seat) return null;
+    const hand = game.players[seat].hand;
+    const nope = hand.find((c) => c.kind === 'nope');
+    if (!nope) return { kind: 'passNope' };
+    // 只用公开信息决策，绝不 peek 牌库顶。
+    // 发起者打出的牌此刻还在其手里（窗口结算时才移除），据此判断 skip。
+    const actorHand = game.players[w.actor]?.hand || [];
+    const played = actorHand.find((c) => c.id === w.action.cardId);
+    const aimedAtMe = w.targetSeat === seat;
+    const skipsMe = !!played && played.kind === 'skip';
+    const threatensMe = aimedAtMe || skipsMe ||
+      (w.action.kind === 'draw' && w.nopes % 2 === 0 && !hand.some((c) => c.kind === 'defuse'));
+    // 奇数次休想已取消原行动时，除非仍直接针对自己，否则不再浪费牌。
+    if (w.nopes % 2 === 1 && !aimedAtMe && !skipsMe) return { kind: 'passNope' };
+    return threatensMe ? { kind: 'nope' } : { kind: 'passNope' };
+  }
   // When targeted by a Favor, hand a card (prefer not a defuse).
   if (game.pendingFavor && game.pendingFavor.target === seat) {
     const hand = game.players[seat].hand;
@@ -21180,7 +21627,19 @@ const MONOPOLY_BOARD = Object.freeze([
   { i: 21, kind: 'property', name: '长乐宫', group: 'G', price: 320, rent: 28, houseCost: 200 },
   { i: 22, kind: 'property', name: '大明宫', group: 'H', price: 350, rent: 30, houseCost: 200 },
   { i: 23, kind: 'property', name: '兴庆宫', group: 'H', price: 400, rent: 35, houseCost: 200 },
+  // ── 扩充区（追加而非插入，保持 0-23 的既有索引与旧存档/测试兼容） ──
+  { i: 24, kind: 'railroad', name: '东关驿站', group: 'R', price: 150, rent: 25 },
+  { i: 25, kind: 'utility', name: '官营盐铁', group: 'U', price: 130, rent: 4 },
+  { i: 26, kind: 'railroad', name: '西市驿站', group: 'R', price: 150, rent: 25 },
+  { i: 27, kind: 'chance', name: '机会' },
+  { i: 28, kind: 'railroad', name: '南郊驿站', group: 'R', price: 150, rent: 25 },
+  { i: 29, kind: 'utility', name: '官营织造', group: 'U', price: 130, rent: 4 },
+  { i: 30, kind: 'railroad', name: '北门驿站', group: 'R', price: 150, rent: 25 },
+  { i: 31, kind: 'chance', name: '机会' },
 ]);
+
+// 铁路/公用事业也属于可购买资产
+const ASSET_KINDS = new Set(['property', 'railroad', 'utility']);
 
 const BOARD_SIZE = MONOPOLY_BOARD.length;
 
@@ -21188,7 +21647,7 @@ const BOARD_SIZE = MONOPOLY_BOARD.length;
 const GROUP_TILES = (() => {
   const map = {};
   for (const t of MONOPOLY_BOARD) {
-    if (t.kind !== 'property') continue;
+    if (!ASSET_KINDS.has(t.kind)) continue;
     (map[t.group] = map[t.group] || []).push(t.i);
   }
   return map;
@@ -21211,6 +21670,15 @@ const CHANCE = Object.freeze([
   { text: '远行经商，前进至大明宫', moveTo: 22 },
   { text: '误入巷弄，前进至免费停车', moveTo: 11 },
   { text: '倒车回府，后退三格', moveBack: 3 },
+  // ── 新增 8 张：减少重复感，增加玩家互动 ──
+  { text: '科举高中，获得 250 金', cash: 250 },
+  { text: '商队折本，支出 120 金', cash: -120 },
+  { text: '朝廷赏赐，向每位对手各收 80 金', collect: 80 },
+  { text: '修缮城墙，为每位对手各付 30 金', payEach: 30 },
+  { text: '快马加鞭，前进至东关驿站', moveTo: 24 },
+  { text: '巡查盐铁，前进至官营盐铁', moveTo: 25 },
+  { text: '赴任南郊，前进至南郊驿站', moveTo: 28 },
+  { text: '误犯律令，直接进入监狱', jail: true },
 ]);
 
 /** 只读机会卡堆与常量，供测试与 UI 引用 */
@@ -21222,6 +21690,11 @@ function propIndex(tile) {
   return MONOPOLY_BOARD.find((t) => t.i === tile);
 }
 
+/** 返回 seat 在环形竞价序列中的位置（-1 = 不在序列里） */
+function orderAt(auction, seat) {
+  return auction.order.indexOf(seat);
+}
+
 class MonopolyGame {
   constructor({ playerNames = [], options = {}, random } = {}) {
     this.random = random || Math.random;
@@ -21231,13 +21704,15 @@ class MonopolyGame {
     this.winner = null;
     this.endReason = null;
     this.turnCount = 0;
-    this.pending = null; // {kind:'buy'|'manage', tile}
+    this.pending = null; // {kind:'buy'|'manage'|'auction'|'trade', ...}
     this.roll = null;
     this.extraRollFor = null; // 掷出双数后可再走一次的座位
     this.chanceDeck = [];     // 机会卡堆（存 CHANCE 下标，抽出的卡放回堆底）
+    this.auction = null;      // {tile, price, highest, bidder, order, idx, passed:[seat]}
+    this.trade = null;        // {from, to, give:{tile,cash}, want:{tile,cash}, responded:[]}
     this.last = null;
     this.log = [];
-    this.properties = MONOPOLY_BOARD.filter((t) => t.kind === 'property').map((t) => ({
+    this.properties = MONOPOLY_BOARD.filter((t) => ASSET_KINDS.has(t.kind)).map((t) => ({
       tile: t.i,
       ownerId: null,
       houses: 0,
@@ -21246,6 +21721,16 @@ class MonopolyGame {
   }
 
   get n() { return this.players.length; }
+
+  /** 从 from 之后找到下一个存活座位（含 from 自身，若全场只剩一个） */
+  nextAlive(from) {
+    let s = from;
+    for (let i = 0; i < this.n; i++) {
+      s = (s + 1) % this.n;
+      if (this.players[s] && !this.players[s].bankrupt) return s;
+    }
+    return from;
+  }
 
   makePlayer(id, name) {
     return {
@@ -21280,6 +21765,8 @@ class MonopolyGame {
     this.roll = null;
     this.extraRollFor = null;
     this.log = [];
+    this.auction = null;
+    this.trade = null;
     this.buildChanceDeck();
     this.pushLog(`游戏开始：${this.players.map((p) => p.name).join('、')}，每人 ${START_CASH} 金`);
     this.pushLog(`轮到 ${this.players[this.current].name}`);
@@ -21318,6 +21805,11 @@ class MonopolyGame {
       case 'mortgage': return this.mortgage(seat, act.tile);
       case 'redeem': return this.redeem(seat, act.tile);
       case 'end': return this.endTurn(seat);
+      case 'bid': return this.auctionBid(seat, act.amount);
+      case 'pass_auction': return this.auctionPass(seat);
+      case 'offer_trade': return this.offerTrade(seat, act);
+      case 'accept_trade': return this.resolveTrade(seat, true);
+      case 'decline_trade': return this.resolveTrade(seat, false);
       default: throw new GameError('UNKNOWN_ACT', '未知大富翁操作');
     }
   }
@@ -21448,7 +21940,7 @@ class MonopolyGame {
     if (!p || p.bankrupt || this.phase !== 'playing') return this.snapshot();
     const tile = MONOPOLY_BOARD[p.pos];
     if (!tile) return this.advanceTurn();
-    if (tile.kind === 'property') {
+    if (ASSET_KINDS.has(tile.kind)) {
       const prop = this.propAt(tile.i);
       if (!prop) return this.advanceTurn();
       if (prop.ownerId === null) {
@@ -21475,8 +21967,7 @@ class MonopolyGame {
       }
       const bonus = this.hasGroupMonopoly(prop.ownerId, tile.group) ? '（同组连片倍租）' : '';
       this.pushLog(`${p.name} 踩中 ${owner.name} 的「${tile.name}」，支付租金 ${rent} 金${bonus}`);
-      if (!this.payBank(p, rent)) return this.advanceTurn();
-      owner.cash += rent;
+      if (!this.payBank(p, rent, prop.ownerId)) return this.advanceTurn();
       return this.advanceTurn();
     }
     if (tile.kind === 'tax') {
@@ -21529,6 +22020,19 @@ class MonopolyGame {
       this.collectFromRivals(p, card.collect);
       return this.phase !== 'playing';
     }
+    if (card.payEach) {
+      let paid = 0;
+      for (const other of this.players) {
+        if (other.id === p.id || other.bankrupt) continue;
+        if (this.phase !== 'playing') break;
+        if (!this.payBank(p, card.payEach, other.id)) break;
+        other.cash += card.payEach;
+        paid += card.payEach;
+      }
+      this.pushLog(`${p.name} 向对手支付共 ${paid} 金（每人 ${card.payEach} 金）`);
+      if (this.phase !== 'playing') return true;
+      return false;
+    }
     if (card.moveTo != null || card.moveBack) {
       if (card.moveTo != null) this.moveToTile(p, card.moveTo);
       else this.moveBack(p, card.moveBack);
@@ -21545,15 +22049,82 @@ class MonopolyGame {
     for (const other of this.players) {
       if (other.id === p.id || other.bankrupt) continue;
       if (this.phase !== 'playing') break;
-      if (!this.payBank(other, amount)) {
+      if (!this.payBank(other, amount, p.id)) {
         if (this.phase !== 'playing') break;
         continue;
       }
       gained += amount;
     }
-    p.cash += gained;
+    // payBank(creditor=p.id) 已经把钱记入 p.cash，这里不再重复累加。
     if (gained > 0) this.pushLog(`${p.name} 收取 ${gained} 金（每位对手 ${amount} 金）`);
     return gained;
+  }
+
+  // ————————————————————— 玩家交易 —————————————————————
+
+  /** 发起交易：给出 give（tile/cash）换对方 want（tile/cash）。 */
+  offerTrade(seat, act) {
+    this.assertTurn(seat);
+    if (this.pending || this.auction || this.trade) throw new GameError('MUST_FIRST', '请先处理当前事件');
+    const to = Number(act.targetSeat);
+    const target = this.players[to];
+    if (!target || target.bankrupt || to === seat) throw new GameError('ILLEGAL', '请选择一位存活的对手');
+    const give = { tile: this.tradeTile(act.giveTile, seat), cash: this.tradeCash(act.giveCash, seat) };
+    const want = { tile: this.tradeTile(act.wantTile, to), cash: this.tradeCash(act.wantCash, to) };
+    if (give.tile == null && give.cash === 0) throw new GameError('ILLEGAL', '交易必须给出至少一项');
+    if (want.tile == null && want.cash === 0) throw new GameError('ILLEGAL', '交易必须索取至少一项');
+    this.trade = { from: seat, to, give, want };
+    this.pending = { kind: 'trade' };
+    this.current = to;
+    this.pushLog(`${this.players[seat].name} 向 ${target.name} 提出交易`);
+    return this.snapshot();
+  }
+
+  tradeTile(value, owner) {
+    if (value == null || value === '') return null;
+    const i = Number(value);
+    const prop = this.propAt(i);
+    if (!prop || prop.ownerId !== owner) throw new GameError('ILLEGAL', '只能交易自己名下的地产');
+    if (prop.houses > 0) throw new GameError('ILLEGAL', '有建筑的地产不可交易');
+    return i;
+  }
+
+  tradeCash(value, seat) {
+    if (value == null || value === '') return 0;
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 0 || n > this.players[seat].cash) throw new GameError('ILLEGAL', '现金数额不合法');
+    return n;
+  }
+
+  resolveTrade(seat, accept) {
+    if (this.phase !== 'playing' || !this.trade || this.trade.to !== seat || this.current !== seat) {
+      throw new GameError('NOT_TRADE_TARGET', '当前无需你决定交易');
+    }
+    const t = this.trade;
+    const a = this.players[t.from], b = this.players[t.to];
+    this.trade = null;
+    this.pending = null;
+    if (!accept) {
+      this.pushLog(`${b.name} 拒绝了 ${a.name} 的交易`);
+      // 拒绝后不再把回合交回发起者：否则 AI 会反复提同一笔交易形成死循环。
+      this.current = this.nextAlive(t.from);
+      this.turnCount += 1;
+      return this.snapshot();
+    }
+    // 原子交换：校验一次，落实一次，避免中途失败留下半交易状态。
+    if (a.cash < t.give.cash || b.cash < t.want.cash ||
+        (t.give.tile != null && this.propAt(t.give.tile)?.ownerId !== t.from) ||
+        (t.want.tile != null && this.propAt(t.want.tile)?.ownerId !== t.to)) {
+      throw new GameError('ILLEGAL', '交易条件已变化，无法成交');
+    }
+    if (t.give.tile != null) this.propAt(t.give.tile).ownerId = t.to;
+    if (t.want.tile != null) this.propAt(t.want.tile).ownerId = t.from;
+    a.cash += t.want.cash - t.give.cash;
+    b.cash += t.give.cash - t.want.cash;
+    this.pushLog(`${a.name} 与 ${b.name} 达成交易（地产互换 / 现金 ${t.give.cash}⇄${t.want.cash}）`);
+    this.current = this.nextAlive(t.from);
+    this.turnCount += 1;
+    return this.snapshot();
   }
 
   buy(seat) {
@@ -21577,8 +22148,85 @@ class MonopolyGame {
     if (!this.pending || this.pending.kind !== 'buy') throw new GameError('NO_PENDING', '当前没有待购买的地产');
     const tile = propIndex(this.pending.tile);
     this.pending = null;
-    this.pushLog(`${this.players[seat].name} 放弃购买「${tile?.name ?? '地产'}」`);
-    this.advanceTurn();
+    this.pushLog(`${this.players[seat].name} 放弃购买「${tile?.name ?? '地产'}」，进入公开拍卖`);
+    this.startAuction(tile.i, Math.ceil((tile?.price ?? 100) / 2));
+    return this.snapshot();
+  }
+
+  // ————————————————————— 公开拍卖 —————————————————————
+
+  /** 放弃购买后：所有存活玩家按座号轮流加价或弃权，价高者得。 */
+  startAuction(tileIndex, startPrice) {
+    const order = this.players.filter((p) => !p.bankrupt).map((p) => p.id);
+    // 从放弃购买者的下家开始，环形排序
+    const from = this.current;
+    order.sort((a, b) => ((a - from + this.n) % this.n) - ((b - from + this.n) % this.n));
+    this.auction = {
+      tile: tileIndex,
+      price: Math.max(1, startPrice),
+      highest: null,
+      bidder: null,
+      order,
+      by: from,
+      idx: 0,
+      passed: [],
+    };
+    this.pending = { kind: 'auction', tile: tileIndex };
+    this.current = order[0];
+  }
+
+  assertAuctionTurn(seat) {
+    const a = this.auction;
+    if (!a || this.phase !== 'playing') throw new GameError('NO_AUCTION', '当前没有拍卖');
+    if (a.passed.includes(seat) || orderAt(a, seat) !== a.idx) throw new GameError('NOT_YOUR_TURN', '还没轮到你竞价');
+  }
+
+  advanceAuction() {
+    const a = this.auction;
+    a.idx += 1;
+    while (a.idx < a.order.length && a.passed.includes(a.order[a.idx])) a.idx += 1;
+    if (a.idx >= a.order.length) return this.finishAuction();
+    this.current = a.order[a.idx];
+    return this.snapshot();
+  }
+
+  auctionBid(seat, amount) {
+    this.assertAuctionTurn(seat);
+    const a = this.auction;
+    const tile = propIndex(a.tile);
+    const p = this.players[seat];
+    const minBid = a.bidder === null ? a.price : a.price + 1;
+    const bid = Number(amount);
+    if (!Number.isInteger(bid) || bid < minBid) throw new GameError('BID_TOO_LOW', `出价需 ≥ ${minBid} 金`);
+    if (p.cash < bid) throw new GameError('INSUFFICIENT_GOLD', '现金不足');
+    a.price = bid; a.bidder = seat; a.highest = bid;
+    this.pushLog(`${p.name} 竞价 ${bid} 金，暂为最高（「${tile.name}」）`);
+    return this.advanceAuction();
+  }
+
+  auctionPass(seat) {
+    this.assertAuctionTurn(seat);
+    this.auction.passed.push(seat);
+    this.pushLog(`${this.players[seat].name} 放弃竞价`);
+    return this.advanceAuction();
+  }
+
+  finishAuction() {
+    const a = this.auction;
+    const tile = propIndex(a.tile);
+    const prop = this.propAt(a.tile);
+    this.auction = null;
+    this.pending = null;
+    if (a.bidder === null || !prop || prop.ownerId !== null) {
+      this.pushLog(`「${tile?.name ?? '地产'}」流拍，保持无主`);
+      this.current = a.by;
+      return this.snapshot();
+    }
+    const p = this.players[a.bidder];
+    p.cash -= a.price;
+    prop.ownerId = a.bidder;
+    this.pushLog(`${p.name} 以 ${a.price} 金拍得「${tile.name}」`);
+    this.current = a.bidder;
     return this.snapshot();
   }
 
@@ -21589,6 +22237,7 @@ class MonopolyGame {
     const prop = this.propAt(tile.i);
     const p = this.players[seat];
     if (!tile || !prop || prop.ownerId !== seat) throw new GameError('NOT_OWNER', '不是你的地产');
+    if (tile.kind !== 'property') throw new GameError('NOT_BUILDABLE', '铁路与公用事业不能建造');
     if (prop.mortgaged) throw new GameError('MORTGAGED', '抵押中的地产需先赎回才能建造');
     if (prop.houses >= MAX_HOUSES) throw new GameError('MAX_HOUSES', '该地产已达到最高等级');
     if (p.cash < tile.houseCost) throw new GameError('INSUFFICIENT_GOLD', `建造需要 ${tile.houseCost} 金`);
@@ -21613,7 +22262,7 @@ class MonopolyGame {
     const p = this.players[seat];
     if (p.inJail > 0) throw new GameError('IN_JAIL', '狱中不能处置地产');
     const tile = propIndex(Number(tileIdx));
-    const prop = tile && tile.kind === 'property' ? this.propAt(tile.i) : null;
+    const prop = tile && ASSET_KINDS.has(tile.kind) ? this.propAt(tile.i) : null;
     if (!prop) throw new GameError('BAD_TILE', '该格不是可抵押的地产');
     if (prop.ownerId !== seat) throw new GameError('NOT_OWNER', '不是你的地产');
     if (prop.mortgaged) throw new GameError('MORTGAGED', '该地产已处于抵押状态');
@@ -21630,7 +22279,7 @@ class MonopolyGame {
     const p = this.players[seat];
     if (p.inJail > 0) throw new GameError('IN_JAIL', '狱中不能处置地产');
     const tile = propIndex(Number(tileIdx));
-    const prop = tile && tile.kind === 'property' ? this.propAt(tile.i) : null;
+    const prop = tile && ASSET_KINDS.has(tile.kind) ? this.propAt(tile.i) : null;
     if (!prop) throw new GameError('BAD_TILE', '该格不是可赎回的地产');
     if (prop.ownerId !== seat) throw new GameError('NOT_OWNER', '不是你的地产');
     if (!prop.mortgaged) throw new GameError('NOT_MORTGAGED', '该地产未抵押');
@@ -21659,32 +22308,43 @@ class MonopolyGame {
     this.pushLog(`${p.name} 因${reason}进入监狱（可交保 ${BAIL_COST} 金 / 狱中掷双数 / 服刑满 ${JAIL_MAX_TURNS} 回合强制出狱）`);
   }
 
-  payBank(p, amount) {
+  payBank(p, amount, creditor = null) {
     if (amount <= 0) return true;
     if (p.cash < amount) {
+      const paid = p.cash;
       p.cash = 0;
-      this.bankrupt(p, `无力支付 ${amount} 金`);
+      this.bankrupt(p, `无力支付 ${amount} 金`, creditor, paid);
       return false;
     }
     p.cash -= amount;
+    if (creditor != null && this.players[creditor]) this.players[creditor].cash += amount;
     return true;
   }
 
-  bankrupt(p, reason) {
+  bankrupt(p, reason, creditor = null, partialPaid = 0) {
     if (p.bankrupt) return;
     p.bankrupt = true;
     p.inJail = 0;
     p.doublesRun = 0;
     p.rentFree = 0;
     if (this.extraRollFor === p.id) this.extraRollFor = null;
+    // 破产清算：剩余地产（含抵押状态）转给债主；无债主则回归银行（无主）。
+    let transferred = 0;
     for (const prop of this.properties) {
-      if (prop.ownerId === p.id) {
+      if (prop.ownerId !== p.id) continue;
+      prop.houses = 0;
+      if (creditor != null && this.players[creditor] && !this.players[creditor].bankrupt) {
+        prop.ownerId = creditor;
+        transferred += 1;
+      } else {
         prop.ownerId = null;
-        prop.houses = 0;
         prop.mortgaged = false;
       }
     }
-    this.pushLog(`${p.name} 破产：${reason}`);
+    if (creditor != null && this.players[creditor] && partialPaid > 0) {
+      this.players[creditor].cash += partialPaid;
+    }
+    this.pushLog(`${p.name} 破产：${reason}${transferred ? `，${transferred} 块地产转给债主` : ''}`);
     const alive = this.players.filter((x) => !x.bankrupt);
     if (alive.length <= 1) {
       this.endGame(alive[0]?.id ?? null, 'bankruptcy');
@@ -21740,9 +22400,19 @@ class MonopolyGame {
     });
   }
 
-  /** 单块地产当前应收租金（含建筑等级与连片系数；无主或抵押为 0） */
+  /** 单块资产当前应收租金（含建筑等级与连片系数；无主或抵押为 0） */
   rentOf(tile, prop) {
     if (!tile || !prop || prop.ownerId === null || prop.mortgaged) return 0;
+    const owned = this.properties.filter((x) => x.ownerId === prop.ownerId && !x.mortgaged);
+    if (tile.kind === 'railroad') {
+      const count = owned.filter((x) => propIndex(x.tile)?.kind === 'railroad').length;
+      return [0, 25, 50, 100, 200][Math.min(count, 4)];
+    }
+    if (tile.kind === 'utility') {
+      const count = owned.filter((x) => propIndex(x.tile)?.kind === 'utility').length;
+      const dice = (this.roll && this.roll.total) || 4;
+      return dice * (count >= 2 ? 10 : 4);
+    }
     const base = tile.rent * HOUSE_RENT_MULTIPLIERS[Math.min(prop.houses, MAX_HOUSES)];
     const mult = this.hasGroupMonopoly(prop.ownerId, tile.group) ? GROUP_RENT_MULTIPLIER : 1;
     return Math.round(base * mult);
@@ -21821,9 +22491,32 @@ class MonopolyGame {
   }
 
   actionsFor(seat) {
-    if (this.phase !== 'playing' || seat !== this.current) return [];
+    if (this.phase !== 'playing') return [];
     const p = this.players[seat];
     if (!p || p.bankrupt) return [];
+    if (this.auction) {
+      if (seat !== this.current || this.auction.passed.includes(seat)) return [];
+      const a = this.auction;
+      const tile = propIndex(a.tile);
+      const minBid = a.bidder === null ? a.price : a.price + 1;
+      const out = [{ id: 'pass_auction', kind: 'pass_auction', label: '放弃竞价', command: { kind: 'pass_auction' } }];
+      if (p.cash >= minBid) {
+        out.unshift({
+          id: `bid:${minBid}`, kind: 'bid', amount: minBid,
+          label: `出价 ${minBid} 金竞拍「${tile.name}」`, command: { kind: 'bid', amount: minBid },
+        });
+      }
+      return out;
+    }
+    if (this.pending?.kind === 'trade') {
+      if (seat !== this.current) return [];
+      const t = this.trade;
+      return [
+        { id: 'accept_trade', kind: 'accept_trade', label: '接受交易', command: { kind: 'accept_trade' } },
+        { id: 'decline_trade', kind: 'decline_trade', label: '拒绝交易', command: { kind: 'decline_trade' } },
+      ];
+    }
+    if (seat !== this.current) return [];
     if (this.pending?.kind === 'buy') {
       const tile = propIndex(this.pending.tile);
       const canBuy = tile && p.cash >= tile.price;
@@ -21837,7 +22530,7 @@ class MonopolyGame {
       const tile = propIndex(this.pending.tile);
       const prop = this.propAt(tile.i);
       const out = [];
-      if (prop && !prop.mortgaged && prop.houses < MAX_HOUSES && p.cash >= tile.houseCost) {
+      if (tile?.kind === 'property' && prop && !prop.mortgaged && prop.houses < MAX_HOUSES && p.cash >= tile.houseCost) {
         out.push({ id: 'build', kind: 'build', label: `建造「${tile.name}」→ Lv${prop.houses + 1}（${tile.houseCost} 金）`, command: { kind: 'build' } });
       }
       out.push(...this.redeemActions(seat));
@@ -21859,8 +22552,23 @@ class MonopolyGame {
       });
       return out;
     }
+    const offers = this.players
+      .filter((o) => !o.bankrupt && o.id !== seat)
+      .map((o) => {
+        // AI/无 UI 客户端可用的默认报价：现金换对方最贵的一块无建筑地产。
+        const target = this.mortgageable(o.id)[0];
+        if (target == null || p.cash < Math.ceil(target.price * 0.6)) return null;
+        const cash = Math.ceil(target.price * 0.4);
+        return {
+          id: `offer_trade:${o.id}:${target.i}`, kind: 'offer_trade',
+          label: `向 ${o.name} 出价 ${cash} 金购买「${target.name}」`,
+          command: { kind: 'offer_trade', targetSeat: o.id, giveCash: cash, wantTile: target.i },
+        };
+      })
+      .filter(Boolean);
     return [
       { id: 'roll', kind: 'roll', label: '掷骰子', command: { kind: 'roll' } },
+      ...offers,
       ...this.redeemActions(seat),
       ...this.mortgageActions(seat),
     ];
@@ -21876,6 +22584,12 @@ class MonopolyGame {
       roll: this.roll,
       extraRollFor: this.extraRollFor,
       pending: this.pending ? { ...this.pending } : null,
+      auction: this.auction ? {
+        tile: this.auction.tile, price: this.auction.price, highest: this.auction.highest,
+        bidder: this.auction.bidder, awaiting: this.current,
+        passed: this.auction.passed.slice(),
+      } : null,
+      trade: this.trade ? { ...this.trade } : null,
       chanceCards: this.chanceDeck.length,
       players: this.players.map((p) => ({
         id: p.id, name: p.name, cash: p.cash, pos: p.pos, inJail: p.inJail, bankrupt: p.bankrupt,
@@ -21921,7 +22635,22 @@ function aiMonopoly(game, seat) {
   const acts = game.actionsFor(seat);
   if (!acts.length) return null;
   const p = game.players[seat];
-  const mortgage = acts.filter((a) => a.kind === 'mortgage');
+
+  // 拍卖：估值高于当前价且手头宽裕才跟价，否则弃权。
+  if (game.auction) {
+    const tile = propIndex(game.auction.tile);
+    const bid = acts.find((a) => a.kind === 'bid');
+    if (tile && bid && p.cash >= bid.amount + 200 && bid.amount <= Math.ceil(tile.price * 0.8)) return bid.command;
+    return { kind: 'pass_auction' };
+  }
+  // 交易：对方报价若净收益为正就接受。
+  if (game.pending?.kind === 'trade') {
+    const t = game.trade;
+    const gainTile = t.give.tile == null ? 0 : propIndex(t.give.tile).price;
+    const loseTile = t.want.tile == null ? 0 : propIndex(t.want.tile).price;
+    return (gainTile + t.give.cash >= loseTile + t.want.cash)
+      ? { kind: 'accept_trade' } : { kind: 'decline_trade' };
+  }  const mortgage = acts.filter((a) => a.kind === 'mortgage');
   const redeem = acts.filter((a) => a.kind === 'redeem');
 
   if (game.pending?.kind === 'buy') {
@@ -21950,6 +22679,11 @@ function aiMonopoly(game, seat) {
   // 手头紧时抵押救急，宽裕时把失血的地赎回来
   if (p.cash < 200 && mortgage.length) return mortgage[0].command;
   if (p.cash > 800 && redeem.length) return redeem[0].command;
+  // 主动交易仅在回合早期且对方尚未持有大量资产时尝试（避免无限互提交易）。
+  if (p.cash > 900 && game.turnCount <= 3) {
+    const offer = acts.find((a) => a.kind === 'offer_trade');
+    if (offer) return offer.command;
+  }
   return { kind: 'roll' };
 }
 
@@ -22554,7 +23288,8 @@ const GAMES = {
     card: 'EK',
     min: 2,
     max: 5,
-    create: (o) => new ExplodingKittensGame(o),
+    // 休想卡（Nope）默认启用：行动先开反应窗口，所有存活玩家表态后结算。
+    create: (o) => new ExplodingKittensGame({ ...(o || {}), options: { nopeWindow: true, ...((o || {}).options || {}) } }),
     ai: aiEk,
   },
   liarsbar: {
@@ -24414,20 +25149,20 @@ const GAME_NAMES = {
 const RULES = {
   uno: '轮到你时，打出一张与桌面同色或同数字的牌；万能牌可指定颜色；没有可出的牌就摸一张，摸后只能出刚摸的牌或过。出完最后一张即获胜。',
   doudizhu: '3 人斗地主。叫分 0-3，最高者为地主并拿底牌。地主先出；跟牌必须同牌型且更大，或炸弹/王炸。可以过牌，但本轮首出不能过。',
-  exploding: '轮流摸牌。摸到炸弹且手里有拆除牌时可选择把炸弹放回牌库任意位置。功能牌：跳过、看顶 3 张、洗牌、恩惠（向目标要一张牌）、攻击（目标多摸一张）、猫牌（2/3 张相同猫牌偷目标牌）。',
+  exploding: '轮流摸牌。摸到炸弹且手里有拆除牌时可选择把炸弹放回牌库任意位置。功能牌：跳过、看顶 3 张、洗牌、恩惠（向目标要一张牌）、攻击（目标多摸一张）、猫牌（2/3 张相同猫牌偷目标牌）、休想卡（在反应窗口取消任意行动；可被另一张休想卡反制，奇数张生效、偶数张抵消）。炸弹与拆弹不可被休想卡打断。',
   liarsbar: '每人 3 张牌，本轮目标点数见 targetRank。轮到你可出 1 张或多张牌并声称它们是目标点数（可以撒谎），或揭穿上家。被揭穿/揭穿失败会开枪，中弹出局。',
   guozhan: '同时下令的国战：你控制一个势力。选择若干合法动作（可空），然后锁定；所有势力锁定后统一结算。动作必须从给出的 actions 里选。全国民心影响战力与溃败；地区动乱压低产出和守备；基建降动乱并积累民心。战力比低于 1 不宜强攻；粮草为负应裁军或屯田；水师可沿水路连走 1–2 条航线；间谍可看清敌区 3 回合。',
-  monopoly: '2-4 人大富翁。轮到你时掷骰，经过起点得 200；落在无主地产可购买；踩到别人地产付租金；落在自己地产可建造；现金不足会破产。目标是成为最后未破产的人，或在回合上限时净资产最高。',
+  monopoly: '2-4 人大富翁。掷骰行进，经过起点得 200；落在无主资产可买，放弃则公开拍卖（加价或弃权，价高者得）；踩别人资产付租金，铁路按持有 1/2/3/4 条收 25/50/100/200，公用事业按骰点×4 或 ×10；自己地产可建造。自己回合可提出交易（给地+现金换地+现金），对方接受才成交；破产时剩余地产转给债主。目标是最后未破产或回合上限时净资产最高。',
   werewolf: '6-8 人狼人杀。狼人夜间共同猎杀；预言家每晚查验一人；女巫有一瓶解药和一瓶毒药。白天所有存活者依次公开发言，然后投票放逐一人；狼人数量达到好人数即狼人胜，狼人全部出局则好人胜。',
 };
 
 const EXAMPLES = {
   uno: '{"kind":"play","cardId":"c12","color":"red"} 或 {"kind":"draw"} 或 {"kind":"pass"}',
   doudizhu: '{"kind":"bid","score":2} 或 {"kind":"play","cardIds":["d1","d2"]} 或 {"kind":"pass"}',
-  exploding: '{"kind":"draw"} 或 {"kind":"play","cardId":"e12"} 或 {"kind":"defuse","position":3} 或 {"kind":"give","cardId":"e4"}',
+  exploding: '{"kind":"draw"} 或 {"kind":"play","cardId":"e12"} 或 {"kind":"defuse","position":3} 或 {"kind":"give","cardId":"e4"} 或 {"kind":"nope"} 或 {"kind":"passNope"}',
   liarsbar: '{"kind":"claim","cardIds":["l3"]} 或 {"kind":"call"} 或 {"kind":"designate","targetSeat":2} 或 {"kind":"fire"}',
   guozhan: '{"kind":"guozhan","actionIds":["attack:u_north_1:h12","recruit:h03:spearman:5000"],"lock":true}',
-  monopoly: '{"kind":"roll"} 或 {"kind":"buy"} 或 {"kind":"decline"} 或 {"kind":"build"} 或 {"kind":"end"}',
+  monopoly: '{"kind":"roll"} 或 {"kind":"buy"} 或 {"kind":"decline"} 或 {"kind":"bid","amount":60} 或 {"kind":"pass_auction"} 或 {"kind":"build"} 或 {"kind":"end"} 或 {"kind":"offer_trade","targetSeat":1,"giveCash":100,"wantTile":3} 或 {"kind":"accept_trade"} 或 {"kind":"decline_trade"}',
   werewolf: '{"kind":"kill","targetSeat":2} 或 {"kind":"vote","targetSeat":2} 或 {"kind":"say","text":"我认为 2 号可疑"} 或 {"kind":"witch","action":"save"}',
 };
 
@@ -24525,6 +25260,14 @@ function ddzLegal(game, seat, view) {
 
 function ekLegal(game, seat, view) {
   const hand = game.players[seat].hand;
+  // 休想窗口：只有被点名的响应者能表态（打休想卡或明确放弃）。
+  if (game.pendingNope) {
+    const w = game.pendingNope;
+    if (w.actor === seat || !w.order.includes(seat) || w.responded.includes(seat) || game.current !== seat) return [];
+    return hand.some((c) => c.kind === 'nope')
+      ? [{ kind: 'nope' }, { kind: 'passNope' }]
+      : [{ kind: 'passNope' }];
+  }
   const aliveOthers = game.players.map((p, i) => (p.alive && i !== seat ? i : -1)).filter((i) => i >= 0);
   if (game.pendingFavor && game.pendingFavor.target === seat) {
     return hand.map((c) => ({ kind: 'give', cardId: c.id }));
@@ -24787,6 +25530,8 @@ function cleanDdz(obj) {
 function cleanEk(obj) {
   switch (obj.kind) {
     case 'draw': return { kind: 'draw' };
+    case 'nope': return { kind: 'nope' };
+    case 'passNope': return { kind: 'passNope' };
     case 'play': {
       if (typeof obj.cardId !== 'string' || !obj.cardId) throw new Error('play 需要 cardId');
       return { kind: 'play', cardId: obj.cardId };
@@ -24846,7 +25591,7 @@ function cleanMonopoly(obj, ctx) {
     if (!a) throw new Error('大富翁 actionId 不在合法列表');
     return { ...(a.command || {}) };
   }
-  const allowed = new Set(['roll', 'buy', 'decline', 'build', 'end']);
+  const allowed = new Set(['roll', 'buy', 'decline', 'build', 'end', 'pass_auction']);
   if (!allowed.has(obj.kind)) throw new Error('大富翁动作不合法');
   return { kind: obj.kind };
 }

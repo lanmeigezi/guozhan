@@ -5,10 +5,20 @@
 // turns = play action cards (skip/shuffle/see) then must draw; defuse is applied
 // automatically when you hit a kitten.
 //
-// Card kinds: explode, defuse, skip, see, shuffle, cat (junk).
+// Card kinds: explode, defuse, skip, see, shuffle, attack, favor, cat (junk),
+//             nope (休想卡：取消任意行动，可被另一张休想卡反制).
+//
+// Nope chain rule: when an action is played, every other alive player gets one
+// chance (in turn order) to play a Nope or pass. Each Nope toggles the effect:
+// odd total Nopes ⇒ the original action is cancelled; even (incl. 0) ⇒ it
+// resolves. This naturally implements "Nope can be Noped". Exploding kittens
+// and defusing are NOT nope-able — they are not player actions.
 
 import { GameError } from './game-error.js';
 import { shuffle } from './cards.js';
+
+// 这些行动可以被休想卡打断。give 是恩惠的强制回应，不单独开放打断。
+const NOPE_ABLE = new Set(['play', 'draw', 'cats', 'favor', 'attack', 'shuffle2']);
 
 let _id = 0;
 const mk = (kind, extra) => ({ id: 'ek' + (kind) + '-' + (_id++), kind: kind, ...extra });
@@ -17,8 +27,8 @@ export function buildEkDeck(playerCount, handSize = 4) {
   const n = Math.max(2, playerCount | 0 || 2);
   const need = n * (handSize + 1) + 12; // serve every player + draw-pile reserve
   const cards = [];
-  // cycle: skip, see, shuffle, attack, favor, and 3 cat subtypes (红/黄/蓝, 2 copies each)
-  const cycle = ['skip', 'see', 'shuffle', 'attack', 'favor', 'cat红', 'cat红', 'cat黄', 'cat黄', 'cat蓝', 'cat蓝'];
+  // cycle: skip, see, shuffle, attack, favor, nope, and 3 cat subtypes (红/黄/蓝, 2 copies each)
+  const cycle = ['skip', 'see', 'shuffle', 'attack', 'favor', 'nope', 'cat红', 'cat红', 'cat黄', 'cat黄', 'cat蓝', 'cat蓝'];
   for (let i = 0; i < need; i++) {
     const t = cycle[i % cycle.length];
     if (t.indexOf('cat') === 0) cards.push(mk('cat', { cat: t.slice(3) }));
@@ -30,6 +40,9 @@ export function buildEkDeck(playerCount, handSize = 4) {
 const DEFAULT_OPTIONS = {
   handSize: 4,          // cards dealt to each player (besides the starting defuse)
   kittensPerPlayer: 1,  // exploding kittens lookahead handled in start()
+  // 关闭（默认）：行动即时结算，旧剧本/旧测试逐字不变。
+  // 开启：行动先进入休想窗口，所有存活玩家表态后按 Nope 奇偶结算。
+  nopeWindow: false,
 };
 
 export class ExplodingKittensGame {
@@ -46,6 +59,10 @@ export class ExplodingKittensGame {
     this.seeTop = null; // transient reveal for the "see" action
     this.pendingDefuse = null; // {seat, card} when a player defused a bomb and must choose a position
     this.pendingFavor = null; // {from, target} when a Favor card is being resolved
+    // 休想卡反应窗口：{ action, actor, nopes, order, responded:[seat], targetSeat }
+    // order 是本次有权响应的座位序列（除发起者外的存活玩家，按座号环形排序）；
+    // nopes 为已打出的休想卡总数：奇数取消原行动，偶数（含 0）照常结算。
+    this.pendingNope = null;
   }
 
   get n() { return this.players.length; }
@@ -84,6 +101,7 @@ export class ExplodingKittensGame {
     this.seeTop = null;
     this.pendingDefuse = null;
     this.pendingFavor = null;
+    this.pendingNope = null;
     return this.snapshot();
   }
 
@@ -110,6 +128,20 @@ export class ExplodingKittensGame {
     const act = action || {};
     switch (act.kind) {
       case 'start': return this.start();
+      case 'nope': return this.playNope(seat);
+      case 'passNope': return this.passNope(seat);
+      default: break;
+    }
+    // 休想窗口内只接受 nope / passNope（爆炸/拆弹等不可打断的例外不经过窗口）。
+    if (this.pendingNope) throw new GameError('MUST_FIRST', '请先处理休想卡窗口');
+    // 可被休想卡打断的行动：开启窗口时先开窗，否则保持旧行为即时结算。
+    if (this.opts.nopeWindow && NOPE_ABLE.has(act.kind)) return this.beginNope(seat, act);
+    return this.execAction(seat, act);
+  }
+
+  /** 真正结算一个行动（已通过休想窗口，或本来就不可打断）。 */
+  execAction(seat, act) {
+    switch (act.kind) {
       case 'play': return this.playCard(seat, act.cardId);
       case 'draw': return this.draw(seat);
       case 'defuse': return this.defuse(seat, act.position);
@@ -122,13 +154,113 @@ export class ExplodingKittensGame {
     }
   }
 
+  /** 开一个休想窗口：除发起者外的存活玩家按座号顺序各表态一次。 */
+  beginNope(seat, act) {
+    this.assertPlaying(seat);
+    if (this.pendingDefuse || this.pendingFavor) throw new GameError('MUST_FIRST', '请先处理当前事件');
+    // 开窗前先校验行动本身：不能因为休想机制绕过原有合法性检查。
+    // 这里只验证「牌是否存在 / 种类是否对 / 目标是否存活」，不改状态。
+    if (act.kind === 'play') {
+      const card = this.players[seat].hand.find((c) => c.id === act.cardId);
+      if (!card) throw new GameError('NO_CARD', '你手里没有这张牌');
+      if (card.kind === 'explode' || card.kind === 'defuse' || card.kind === 'cat' ||
+          card.kind === 'favor' || card.kind === 'attack' || card.kind === 'nope') {
+        throw new GameError('ILLEGAL', '这张牌不能单独打出');
+      }
+    } else if (act.kind === 'favor' || act.kind === 'attack') {
+      const card = this.players[seat].hand.find((c) => c.id === act.cardId);
+      if (!card || card.kind !== act.kind) throw new GameError('NO_CARD', '你没有这张牌');
+      const t = this.players[act.targetSeat];
+      if (!t || !t.alive || act.targetSeat === seat) throw new GameError('ILLEGAL', '请选择一位存活的玩家');
+    } else if (act.kind === 'cats' || act.kind === 'shuffle2') {
+      const cards = (act.cardIds || []).map((id) => this.players[seat].hand.find((c) => c.id === id));
+      if (cards.some((c) => !c)) throw new GameError('NO_CARD', '你手里没有这张牌');
+      const want = act.kind === 'cats' ? ['cat', 2, 3] : ['shuffle', 2, 2];
+      if (cards.length < want[1] || cards.length > want[2] || cards.some((c) => c.kind !== want[0])) {
+        throw new GameError('ILLEGAL', '出牌组合不合法');
+      }
+    }
+    const order = [];
+    for (let i = 1; i < this.n; i++) {
+      const s = (seat + i) % this.n;
+      if (this.players[s].alive) order.push(s);
+    }
+    this.pendingNope = {
+      action: { ...act },
+      actor: seat,
+      targetSeat: act.targetSeat == null ? null : act.targetSeat,
+      nopes: 0,
+      order,
+      responded: [],
+      nopeBy: [],
+    };
+    this.seeTop = null;
+    this.last = { kind: 'nopeWindow', actor: seat, action: act.kind, targetSeat: this.pendingNope.targetSeat };
+    if (order.length === 0) return this.finishNope();
+    this.current = order[0];
+    return this.snapshot();
+  }
+
+  assertNopeResponder(seat) {
+    const w = this.pendingNope;
+    if (!w) throw new GameError('NO_NOPE_WINDOW', '当前没有休想卡窗口');
+    if (!w.order.includes(seat) || w.responded.includes(seat)) throw new GameError('NOT_RESPONDER', '现在不需要你表态');
+    if (seat !== this.current) throw new GameError('NOT_YOUR_TURN', '还没轮到你表态');
+    if (!this.players[seat].alive) throw new GameError('ELIMINATED', '你已被淘汰');
+  }
+
+  /** 打出休想卡：可被下一张休想卡反制（计数奇偶抵消）。 */
+  playNope(seat) {
+    this.assertNopeResponder(seat);
+    const hand = this.players[seat].hand;
+    const card = hand.find((c) => c.kind === 'nope');
+    if (!card) throw new GameError('NO_CARD', '你手里没有休想卡');
+    hand.splice(hand.indexOf(card), 1);
+    this.discard.push(card);
+    const w = this.pendingNope;
+    w.nopes += 1;
+    w.responded.push(seat);
+    w.nopeBy.push(seat);
+    this.last = { kind: 'nope', seat, targetSeat: w.actor, count: w.nopes };
+    return this.advanceNope();
+  }
+
+  /** 明确放弃本次休想表态。 */
+  passNope(seat) {
+    this.assertNopeResponder(seat);
+    this.pendingNope.responded.push(seat);
+    this.last = { kind: 'passNope', seat };
+    return this.advanceNope();
+  }
+
+  advanceNope() {
+    const w = this.pendingNope;
+    const next = w.order.find((s) => !w.responded.includes(s));
+    if (next !== undefined) { this.current = next; return this.snapshot(); }
+    return this.finishNope();
+  }
+
+  finishNope() {
+    const w = this.pendingNope;
+    this.pendingNope = null;
+    if (w.nopes % 2 === 1) {
+      // 奇数张休想卡 ⇒ 原行动取消；回合回到发起者，由其继续摸牌。
+      this.last = { kind: 'noped', actor: w.actor, action: w.action.kind, count: w.nopes };
+      this.current = w.actor;
+      return this.snapshot();
+    }
+    // 偶数张（含 0）⇒ 原行动照常结算。结算期间 current 必须是发起者。
+    this.current = w.actor;
+    return this.execAction(w.actor, w.action);
+  }
+
   playCard(seat, cardId) {
     this.assertPlaying(seat);
     if (this.pendingDefuse || this.pendingFavor) throw new GameError('MUST_FIRST', '请先处理当前事件');
     const hand = this.players[seat].hand;
     const card = hand.find((c) => c.id === cardId);
     if (!card) throw new GameError('NO_CARD', '你手里没有这张牌');
-    if (card.kind === 'explode' || card.kind === 'defuse' || card.kind === 'cat' || card.kind === 'favor' || card.kind === 'attack') {
+    if (card.kind === 'explode' || card.kind === 'defuse' || card.kind === 'cat' || card.kind === 'favor' || card.kind === 'attack' || card.kind === 'nope') {
       throw new GameError('ILLEGAL', '这张牌不能单独打出');
     }
     hand.splice(hand.indexOf(card), 1);
@@ -311,6 +443,15 @@ export class ExplodingKittensGame {
       seeTop: this.seeTop,
       pendingDefuse: this.pendingDefuse ? { seat: this.pendingDefuse.seat } : null,
       pendingFavor: this.pendingFavor ? { from: this.pendingFavor.from, target: this.pendingFavor.target } : null,
+      pendingNope: this.pendingNope ? {
+        actor: this.pendingNope.actor,
+        action: this.pendingNope.action.kind,
+        targetSeat: this.pendingNope.targetSeat,
+        nopes: this.pendingNope.nopes,
+        order: this.pendingNope.order.slice(),
+        responded: this.pendingNope.responded.slice(),
+        awaiting: this.current,
+      } : null,
     };
   }
 
@@ -325,6 +466,27 @@ export class ExplodingKittensGame {
 // ---- AI ----
 export function aiEk(game, seat) {
   if (game.phase !== 'playing') return null;
+  // 休想窗口：轮到自己表态。手上有休想卡时，只在「对方行动会伤害自己」时反制，
+  // 避免无脑消耗；否则明确 passNope（不留空转）。
+  if (game.pendingNope) {
+    const w = game.pendingNope;
+    if (w.actor === seat || !w.order.includes(seat) || w.responded.includes(seat)) return null;
+    if (game.current !== seat) return null;
+    const hand = game.players[seat].hand;
+    const nope = hand.find((c) => c.kind === 'nope');
+    if (!nope) return { kind: 'passNope' };
+    // 只用公开信息决策，绝不 peek 牌库顶。
+    // 发起者打出的牌此刻还在其手里（窗口结算时才移除），据此判断 skip。
+    const actorHand = game.players[w.actor]?.hand || [];
+    const played = actorHand.find((c) => c.id === w.action.cardId);
+    const aimedAtMe = w.targetSeat === seat;
+    const skipsMe = !!played && played.kind === 'skip';
+    const threatensMe = aimedAtMe || skipsMe ||
+      (w.action.kind === 'draw' && w.nopes % 2 === 0 && !hand.some((c) => c.kind === 'defuse'));
+    // 奇数次休想已取消原行动时，除非仍直接针对自己，否则不再浪费牌。
+    if (w.nopes % 2 === 1 && !aimedAtMe && !skipsMe) return { kind: 'passNope' };
+    return threatensMe ? { kind: 'nope' } : { kind: 'passNope' };
+  }
   // When targeted by a Favor, hand a card (prefer not a defuse).
   if (game.pendingFavor && game.pendingFavor.target === seat) {
     const hand = game.players[seat].hand;

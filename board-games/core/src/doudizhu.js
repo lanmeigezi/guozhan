@@ -140,6 +140,7 @@ export class DoudizhuGame {
     this.passCount = 0;
     this.bidScores = []; // per-seat bid score
     this.diPai = []; // 3 kept-aside (底牌)
+    this.played = []; // public play history: {seat, values:[...], combo} — 记牌用
     this.last = null;
   }
 
@@ -223,6 +224,9 @@ export class DoudizhuGame {
       throw new GameError('ILLEGAL', '打不过上家的牌');
     }
     this.lastPlay = { seat, cards: cards.map((c) => ({ ...c })), combo };
+    // Public memory: every played card is visible in 斗地主. The strengthened AI
+    // uses this to count remaining high cards; it never reveals hidden hands.
+    this.played.push(...cards.map((c) => ({ seat, value: c.value, rank: c.rank })));
     this.passCount = 0;
     this.last = { kind: 'play', seat, cards: cards.map((c) => c.id), combo: combo.type };
 
@@ -465,7 +469,9 @@ function legalCardIds(game, seat, cardIds) {
   return cardIds;
 }
 
-export function aiDoudizhu(game, seat) {
+// Legacy rule AI: kept as an exported baseline for A/B benchmarks and as the
+// last-resort fallback. It plays the first legal combo found, without search.
+export function aiDoudizhuLegacy(game, seat) {
   const hand = game.players[seat].hand;
   if (game.phase === DDF.PHASE.BIDDING) {
     const strong = hand.filter((c) => c.value >= VALUE['A']).length +
@@ -508,6 +514,284 @@ function groupCounts(hand) {
   const counts = {};
   for (const c of hand) counts[c.value] = (counts[c.value] || 0) + 1;
   return counts;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// 强化 AI：手牌分解搜索 + 记牌 + 残局，零依赖、确定性、不发非法牌。
+// 设计要点：
+//   1. 所有候选组合都经过 legalCardIds() 复核（同一道闸门，绝不发非法牌）；
+//   2. 估值启发式全整数、无随机、无时间依赖 ⇒ 同输入必出同决策；
+//   3. 手牌分解用「最少手数」递归 + 记忆化 + 节点预算，预算耗尽回落上界估值；
+//   4. 记牌只读 game.played（斗地主出牌本就公开），不看任何隐藏手牌。
+// ─────────────────────────────────────────────────────────────────────
+
+// value index: 0..12 = 3..A? 实际 v = index+3 (3..17)；数组长度 15
+const VIDX = (v) => v - 3;
+const VMAX_I = 14; // value 17 = BJ
+
+function countsOf(hand) {
+  const cs = new Array(15).fill(0);
+  for (const c of hand) cs[VIDX(c.value)]++;
+  return cs;
+}
+function keyOf(cs) { return cs.join(','); }
+function sumOf(cs) { let n = 0; for (const x of cs) n += x; return n; }
+
+/** 枚举一个 count 向量能拆出的牌型（只列代表，用于估值，不用于出牌）。 */
+function shapesOf(cs) {
+  const out = [];
+  // 单 / 对 / 三 / 三带 / 炸弹
+  for (let v = 0; v <= VMAX_I; v++) {
+    if (cs[v] >= 1) out.push([[v, 1]]);
+    if (cs[v] >= 2) out.push([[v, 2]]);
+    if (cs[v] >= 3) {
+      out.push([[v, 3]]);
+      for (let k = 0; k <= VMAX_I; k++) if (k !== v && cs[k] >= 1) { out.push([[v, 3], [k, 1]]); break; }
+      for (let k = 0; k <= VMAX_I; k++) if (k !== v && cs[k] >= 2) { out.push([[v, 3], [k, 2]]); break; }
+    }
+    if (cs[v] === 4) out.push([[v, 4]]);
+  }
+  // 王炸
+  if (cs[13] >= 1 && cs[14] >= 1) out.push([[13, 1], [14, 1]]);
+  // 顺子 / 连对 / 飞机（含翅膀，只取最小翅膀代表）
+  const runs = (need, minLen, maxV) => {
+    for (let v = 0; v <= maxV; v++) {
+      if (cs[v] < need) continue;
+      let end = v;
+      while (end + 1 <= maxV && cs[end + 1] >= need) end++;
+      for (let len = minLen; len <= end - v + 1; len++) {
+        for (let s = v; s + len - 1 <= end; s++) {
+          const body = [];
+          for (let i = s; i < s + len; i++) body.push([i, need]);
+          out.push(body.map((x) => x.slice()));
+          // 翅膀只属于飞机（need=3）：len 个三张配 len 张单 / len 对。
+          if (need !== 3) continue;
+          const singles = [], pairs = [];
+          for (let k = 0; k <= VMAX_I; k++) {
+            if (body.some((b) => b[0] === k)) continue;
+            if (cs[k] >= 1 && singles.length < len) singles.push([k, 1]);
+            if (cs[k] >= 2 && pairs.length < len) pairs.push([k, 2]);
+          }
+          if (singles.length === len) out.push(body.concat(singles));
+          if (pairs.length === len) out.push(body.concat(pairs));
+        }
+      }
+    }
+  };
+  runs(1, 5, 11); // 顺子到 A（v=14 → idx 11）
+  runs(2, 3, 11); // 连对
+  runs(3, 2, 11); // 飞机
+  // 四带二
+  for (let v = 0; v <= VMAX_I; v++) {
+    if (cs[v] !== 4) continue;
+    const singles = [], pairs = [];
+    for (let k = 0; k <= VMAX_I; k++) {
+      if (k === v) continue;
+      if (cs[k] >= 1 && singles.length < 2) singles.push([k, 1]);
+      if (cs[k] >= 2 && pairs.length < 2) pairs.push([k, 2]);
+    }
+    if (singles.length === 2) out.push([[v, 4]].concat(singles));
+    if (pairs.length === 2) out.push([[v, 4]].concat(pairs));
+  }
+  return out;
+}
+
+/** 把牌型代表的 value/count 规格映射成具体手牌 id（取最小 id，稳定）。 */
+function idsOfShape(hand, shape) {
+  const ids = [];
+  for (const [vi, need] of shape) {
+    const value = vi + 3;
+    let got = 0;
+    for (const c of hand) {
+      if (c.value !== value || got >= need) continue;
+      if (ids.includes(c.id)) continue;
+      ids.push(c.id); got++;
+    }
+    if (got < need) return null;
+  }
+  return ids;
+}
+
+function subtract(cs, shape) {
+  const out = cs.slice();
+  for (const [v, k] of shape) {
+    out[v] -= k;
+    if (out[v] < 0) return null;
+  }
+  return out;
+}
+
+/** 最少手数估值：递归拆牌 + 记忆化；节点预算保证最坏情况也有确定上界。 */
+function minTurns(cs, memo, budget) {
+  const total = sumOf(cs);
+  if (total === 0) return 0;
+  const key = keyOf(cs);
+  if (memo.has(key)) return memo.get(key);
+  if (budget.n-- <= 0) return total; // 上界：每张一张一张出
+  let best = total;
+  for (const shape of shapesOf(cs)) {
+    const rest = subtract(cs, shape);
+    if (!rest || sumOf(rest) === total) continue;
+    const t = 1 + minTurns(rest, memo, budget);
+    if (t < best) best = t;
+    if (best <= 1) break;
+  }
+  memo.set(key, best);
+  return best;
+}
+
+function decompose(hand, budgetN = 20000) {
+  const cs = countsOf(hand);
+  return { cs, turns: minTurns(cs, new Map(), { n: budgetN }) };
+}
+
+/** 已出牌的公开统计：v → 已出现张数（含自己打出的）。 */
+function playedCounts(game) {
+  const m = new Array(15).fill(0);
+  for (const p of game.played || []) {
+    const i = VIDX(p.value);
+    if (i >= 0 && i <= VMAX_I) m[i]++;
+  }
+  return m;
+}
+
+/** 外部还剩几张比我大的牌（4 张上限 - 已出 - 我手里）。 */
+function higherOutside(game, seat, value) {
+  const mine = countsOf(game.players[seat].hand);
+  const seen = playedCounts(game);
+  let n = 0;
+  for (let v = value + 1; v <= 17; v++) {
+    const i = VIDX(v);
+    const total = v >= 16 ? 1 : 4;
+    n += Math.max(0, total - seen[i] - mine[i]);
+  }
+  return n;
+}
+
+/** 枚举当前手牌全部合法候选（首出/跟牌统一在此生成，再过 legalCardIds）。 */
+function allCandidates(game, seat) {
+  const hand = game.players[seat].hand;
+  const seen = new Set();
+  const out = [];
+  for (const shape of shapesOf(countsOf(hand))) {
+    const ids = idsOfShape(hand, shape);
+    if (!ids || !ids.length) continue;
+    const key = ids.slice().sort().join(',');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const clean = legalCardIds(game, seat, ids);
+    if (!clean) continue;
+    const combo = classifyDdz(ids.map((id) => hand.find((c) => c.id === id)));
+    out.push({ ids: clean, combo });
+  }
+  return out;
+}
+
+/** 跟牌候选：同型更大 + 炸弹/王炸；首出候选：全部。 */
+function followCandidates(game, seat, target) {
+  return allCandidates(game, seat).filter((x) =>
+    !target || beatsDdz(x.combo, target) || x.combo.type === 'bomb' || x.combo.type === 'rocket');
+}
+
+/** 打完这手后的剩余手数越少越好；同手数优先多出牌、少浪费大牌/炸弹。 */
+function scorePlay(hand, ids, combo, restTurns) {
+  const used = new Set(ids);
+  const rest = hand.filter((c) => !used.has(c.id));
+  const top = combo.rank;
+  const waste = used.size && rest.length
+    ? rest.filter((c) => c.value > top + 2).length * 0.02
+    : 0;
+  const bombCost = (combo.type === 'bomb' || combo.type === 'rocket') && rest.length > 4 ? 0.6 : 0;
+  // 同手数时优先多出牌：ids 越多扣分越少（不是越多扣分越多）。
+  return restTurns - ids.length * 0.01 + waste + bombCost;
+}
+
+/** 叫分估值：大牌 + 炸弹 + 手数，整数、可复算。 */
+function bidPower(hand) {
+  const { turns } = decompose(hand, 8000);
+  const cs = countsOf(hand);
+  let power = 0;
+  for (let v = 10; v <= VMAX_I; v++) power += cs[v]; // J/Q/K/A/2/小王/大王
+  for (let v = 0; v <= VMAX_I; v++) if (cs[v] === 4) power += 2;
+  if (cs[13] && cs[14]) power += 2;
+  return power + Math.max(0, 9 - turns);
+}
+
+/**
+ * 强化斗地主 AI（导出名保持 aiDoudizhu，Host/LLM 回落都走这里）。
+ * 与 aiDoudizhuLegacy 的区别：搜索最少手数、记牌判大、残局优先一手走完。
+ */
+export function aiDoudizhu(game, seat) {
+  const hand = game.players[seat].hand;
+  if (game.phase === DDF.PHASE.BIDDING) {
+    if (game.current !== seat || game.bidScores[seat] !== null) return null;
+    const p = bidPower(hand);
+    const maxBid = Math.min(...game.bidScores.filter((s) => s !== null), 3);
+    let score = p >= 14 ? 3 : p >= 11 ? 2 : p >= 8 ? 1 : 0;
+    // 已有高分叫牌时不必跟到顶，但自己极强仍抢
+    if (score <= maxBid && p < 14) score = Math.max(0, score - 1);
+    return { kind: 'bid', score };
+  }
+  if (game.phase !== DDF.PHASE.PLAYING || game.current !== seat) return null;
+  if (game.lastPlay && game.lastPlay.seat === seat) return { kind: 'pass' };
+
+  const target = game.lastPlay ? game.lastPlay.combo : null;
+  const opponents = game.players
+    .map((p, i) => ({ i, n: p.hand.length }))
+    .filter((x) => x.i !== seat && (game.landlord === null || game.landlord === x.i || game.landlord === seat));
+  const minOpp = opponents.length ? Math.min(...opponents.map((x) => x.n)) : 99;
+  const meLandlord = game.landlord === seat;
+
+  // 农民配合：队友（另一农民）压住地主时，除非能一手走完，否则不抢。
+  if (!meLandlord && target && game.lastPlay.seat !== game.landlord) {
+    const finish = allCandidates(game, seat).find((x) => x.ids.length === hand.length);
+    if (finish) return { kind: 'play', cardIds: finish.ids };
+    return { kind: 'pass' };
+  }
+
+  // 一手走完永远最优（残局）。
+  const all = allCandidates(game, seat);
+  const finisher = all.find((x) => x.ids.length === hand.length && (!target || beatsDdz(x.combo, target)));
+  if (finisher) return { kind: 'play', cardIds: finisher.ids };
+
+  const cands = target ? all.filter((x) => beatsDdz(x.combo, target)) : all;
+  if (!cands.length) return { kind: 'pass' };
+
+  const memo = new Map();
+  const budget = { n: 20000 };
+  let best = null;
+  let bestScore = Infinity;
+  for (const cand of cands) {
+    const used = new Set(cand.ids);
+    const rest = hand.filter((c) => !used.has(c.id));
+    const turns = rest.length ? minTurns(countsOf(rest), memo, budget) : 0;
+    let sc = scorePlay(hand, cand.ids, cand.combo, turns);
+    // 对手只剩 1-2 张：必须卡住，绝不轻易 pass；优先用能压住且不留后患的牌。
+    if (minOpp <= 2 && target) sc -= 0.4;
+    // 记牌：首出单张若外面已无更大牌，等于稳拿一轮（对手少牌时尤其关键）。
+    if (!target && cand.combo.type === 'single' && higherOutside(game, seat, cand.combo.rank) === 0) {
+      sc -= minOpp <= 3 ? 0.5 : 0.15;
+    }
+    // 炸弹/王炸：对手还多时留作后手，除非能一手清空或对手要赢了。
+    if ((cand.combo.type === 'bomb' || cand.combo.type === 'rocket') &&
+        !finisher && minOpp > 3 && rest.length > 4) sc += 1.2;
+    // 稳定 tie-break：分数相同按牌 id 字典序，保证确定性。
+    if (sc < bestScore - 1e-9 || (Math.abs(sc - bestScore) <= 1e-9 &&
+        best && cand.ids.join(',') < best.ids.join(','))) {
+      best = cand; bestScore = sc;
+    }
+  }
+  if (!best) return { kind: 'pass' };
+
+  // 跟牌时若唯一能压的是炸弹且局势未紧，则过牌保留（但仍受对手少牌约束）。
+  if (target && (best.combo.type === 'bomb' || best.combo.type === 'rocket') &&
+      minOpp > 3 && hand.length > 6) {
+    const plain = cands.find((x) => x.combo.type !== 'bomb' && x.combo.type !== 'rocket');
+    if (!plain) return { kind: 'pass' };
+    best = plain;
+  }
+  const finalIds = legalCardIds(game, seat, best.ids);
+  return finalIds ? { kind: 'play', cardIds: finalIds } : { kind: 'pass' };
 }
 
 export const RANKS_DDZ = RANKS;
